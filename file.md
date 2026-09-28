@@ -1,0 +1,79 @@
+# File Architecture and Connections
+
+This document explains **every single file** in the `VK_game_engine` project and how they interact to form a complete, next-generation Vulkan engine.
+
+## `game/` (Entry Point & Gameplay)
+- **`game/main.cpp`**: The primary entry point. Initializes the engine via `engine::init()`, loads assets (`asset_pool`), creates ECS entities (`MeshRenderer`, `Transform`), manages camera inputs, provides ImGui debug controls (freeze culling camera, manual LOD 0–4 overrides, meshlet debug coloring), updates logic, and drives the `draw_scene` rendering loop.
+
+## `src/` (Core Engine Framework)
+### Vulkan Setup & Hardware
+- **`src/device.hpp` / `.cpp`**: Handles low-level GPU initialization. Creates the Vulkan `VkInstance`, queries and selects the `VkPhysicalDevice` (GPU), creates the logical `VkDevice`, sets up queue families, creates the Command Pool, and enables critical modern device features:
+  - `VK_EXT_descriptor_indexing` (Bindless textures and unbounded arrays)
+  - `VK_EXT_mesh_shader` (Task and Mesh shaders)
+  - `VK_KHR_fragment_shader_barycentric` (Hardware barycentric coordinates)
+  - `VK_EXT_scalar_block_layout` (Perfect C++ to GPU struct memory alignment)
+- **`src/swapchain.hpp` / `.cpp`**: Manages the Vulkan Swapchain (the array of images presented to the screen). Handles querying surface capabilities, selecting present modes (Mailbox/Vsync), recreating the swapchain on resize, and allocating the **`VK_FORMAT_R32G32_UINT` Visibility Buffer** image alongside the Depth Buffer.
+- **`src/engine.hpp` / `.cpp`**: The central orchestrator for the engine framework. It bundles `Device`, `Window`, and `Swapchain`. Manages frame synchronization (Fences and Semaphores), per-frame staging buffers, GPU indirect buffers (`VkDrawMeshTasksIndirectCommandEXT`), GPU instance buffers (`InstanceDataSSBO`), Hi-Z depth pyramid downsampling, fullscreen compute dispatches (`cull.comp`, `deferred.comp`), and presentation.
+- **`src/pipeline.hpp` / `.cpp`**: Defines the Graphics and Compute Pipelines:
+  - **Visibility Graphics Pipeline**: Compiles `shader.task`, `shader.mesh`, and `shader.frag`, rendering directly to the 64-bit Visibility Buffer.
+  - **Cull Compute Pipeline**: Compiles `cull.comp` for object-level frustum, Hi-Z, and LOD selection.
+  - **Deferred Resolve Compute Pipeline**: Compiles `deferred.comp` for fullscreen Visibility Buffer decoding and PBR evaluation.
+  - Configures the **Bindless Global Descriptor Set Layout** (Binding 0: SSBO array, Binding 1: texture sampler array) and defines `PushConstantData`.
+
+### Windowing & Input
+- **`src/window.hpp` / `.cpp`**: An abstraction over the GLFW library. Creates the OS window, handles fullscreen/borderless toggling, registers resize callbacks, and tracks the window surface.
+- **`src/input.hpp` / `.cpp`**: GLFW input system wrapper. Tracks keyboard key states (including F2 for freeze culling camera and F3 for debug UI) and mouse cursor movement, allowing `main.cpp` and `camera.cpp` to respond smoothly to user input.
+
+### Utilities & Logic
+- **`src/ecs.hpp` / `.cpp`**: A custom, lightweight Entity Component System (ECS). Uses `entt`-style sparse sets to manage `Entity` IDs and their attached components (`Transform`, `MeshRenderer`).
+- **`src/camera.hpp` / `.cpp`**: Manages the 3D camera. Uses the `input` system to move around (WASD/Mouse), extracts 6 frustum planes, and calculates the View and Projection matrices sent to GPU shaders via PushConstants.
+- **`src/imgui.hpp` / `.cpp`**: Integration of Dear ImGui with Vulkan. Sets up the ImGui context, allocates dedicated descriptor pools, and handles rendering real-time performance stats (active LOD, meshlet counters, triangle counts, freeze toggles).
+
+### Assets & Bindless Resources
+- **`src/asset_pool.hpp` / `.cpp`**: The heart of the engine's Bindless architecture. It acts as a global registry holding all loaded `ModelData` and `TextureData`. Compiles the massive `MaterialSSBO` (Storage Buffer) and writes all texture samplers into the single Global Descriptor Set array.
+- **`src/model.hpp` / `.cpp`**: Uses `fastgltf` to parse binary `.glb` files. Parses multi-LOD meshlet headers ("MLOD"), stores up to 8 discrete LOD levels with individual meshlet counts, offsets, and average 3D triangle edge lengths $L_{\text{tri}}$, and allocates GPU SSBO buffers for vertices, meshlets, vertex indices, and triangle indices.
+- **`src/texture.hpp` / `.cpp`**: Responsible for decoding images into VRAM. Decodes standard formats (PNG/JPG) using `stb_image`, generates complete trilinear mipmap chains down to $1\times 1$ via `vkCmdBlitImage`, and creates `VkSampler` objects with anisotropic filtering.
+
+## `shaders/` (GPU Programs)
+- **`shaders/cull.comp`**: The Tier-1 GPU Compute Pre-Cull shader. Evaluates 6-plane frustum culling and conservative multi-mip Hi-Z occlusion tests on instance bounding boxes. Calculates screen-space projected triangle pixel dimensions to select the optimal discrete LOD (LOD 0 to 4), writes `VkDrawMeshTasksIndirectCommandEXT` directly into an indirect SSBO, and populates draw counts.
+- **`shaders/shader.task`**: The Tier-2 Vulkan Task Shader. Evaluates sub-mesh meshlet bounding spheres against the camera frustum, tests for cone backface culling, and performs Hi-Z occlusion culling per meshlet. Dispatches surviving meshlets to `shader.mesh` and updates atomic debug stats.
+- **`shaders/shader.mesh`**: The Vulkan Mesh Shader. Reads packed meshlet vertex and triangle indices from GPU SSBOs, emits minimal vertex positions (`gl_Position`), and outputs `outMeshletIndex` and per-primitive IDs (`gl_PrimitiveID`) directly to the rasterizer.
+- **`shaders/shader.frag`**: The Visibility Buffer fragment shader. Writes the 64-bit compact ID payload `uvec2((instanceId << 20) | inMeshletIndex, inPrimitiveID)` directly into the `R32G32_UINT` Visibility Buffer.
+- **`shaders/deferred.comp`**: The Fullscreen Visibility Buffer Resolve Compute Shader. Decodes pixel IDs from `inVisibility`, loads the 3 triangle vertices from Bindless SSBOs, analytically reconstructs 2D screen-space barycentric coordinates in NDC, calculates perspective-correct attribute weights, evaluates texel footprint, and samples the Bindless PBR textures with hardware trilinear mipmapping and zero overdraw.
+
+## `tools/` (Offline Asset Pipeline)
+- **`tools/model_compiler.cpp`**: Standalone offline asset pipeline. Reads raw `.gltf` and `.obj` files:
+  1. Deduplicates normal-split duplicate vertices using `meshopt_generateVertexRemapMulti` on `(Position, UV)` while strictly preserving genuine UV chart boundaries.
+  2. Generates 5 discrete progressive LOD levels (100%, 50%, 25%, 12.5%, 6.25%) using strict `meshopt_simplify` to guarantee zero texture seam distortion or contour artifacts.
+  3. Calculates exact 3D triangle edge length metadata $L_{\text{tri}}$ for each LOD.
+  4. Partitions each LOD into optimized Meshlets (max 64 vertices, 124 triangles) using `meshopt_buildMeshlets`.
+  5. Remaps vertex indices back to original vertex buffers via `remapToOriginal`.
+  6. Packages the geometry, embedded textures, and multi-LOD meshlet streams into a single, dense `.glb` binary payload.
+- **`tools/texture_compiler.cpp`**: Helper tool used for batch conversions of raw texture directories into `KTX2` format.
+
+---
+
+## How They Connect (The Complete Pipeline Flow)
+
+1. **Bootstrapping**: `main.cpp` calls `engine::init()`, which initializes `window`, `device`, `swapchain`, and `pipeline` in order, setting up both graphics and compute pipelines and allocating the Visibility Buffer and Depth targets.
+2. **Asset Loading**: `main.cpp` requests models through `asset_pool`. `model::load_glb()` loads the multi-LOD meshlet payload, pushes vertex/meshlet SSBOs to VRAM, extracts embedded textures, and `texture.cpp` generates trilinear mipmap chains.
+3. **Bindless Sync**: `asset_pool::build_materials_ssbo()` compiles all material properties into the global `MaterialSSBO` and registers all texture views/samplers into the single unbounded Global Descriptor Set.
+4. **Logic Update**: In the frame loop, `input` processes keyboard/mouse events, `camera` computes the View/Projection matrices and frustum planes, and active ECS entities update their `Transform` components.
+5. **Rendering Pass**:
+   - **Phase A (Tier-1 Compute Pre-Cull)**:
+     - `engine.cpp` uploads instance bounding boxes and transforms into `instanceBuffers`.
+     - `cull.comp` runs: tests instance AABBs against frustum planes and previous-frame Hi-Z depth pyramid, computes projected triangle pixel size to select LOD level (0–4), and writes `VkDrawMeshTasksIndirectCommandEXT` directly into `indirectBuffers`.
+     - A pipeline barrier synchronizes compute writes to indirect draw reads (`VK_ACCESS_INDIRECT_COMMAND_READ_BIT`).
+   - **Phase B (Visibility Geometry Pass)**:
+     - `engine.cpp` begins the Visibility renderpass targeting the `R32G32_UINT` Visibility Buffer and Depth Buffer.
+     - Issues `vkCmdDrawMeshTasksIndirectEXT` driven by the GPU indirect buffer.
+     - `shader.task` performs sub-mesh frustum, backface cone, and Hi-Z culling, emitting surviving meshlets.
+     - `shader.mesh` emits screen vertices and primitive indices; `shader.frag` writes 64-bit `(instanceId | meshletIndex, primitiveID)` payloads.
+   - **Phase C (Hi-Z Pyramid Downsample)**:
+     - The depth buffer is downsampled across a multi-level mip pyramid using compute/blit shaders to serve conservative occlusion culling for subsequent frames.
+   - **Phase D (Fullscreen Deferred Visibility Resolve)**:
+     - A pipeline barrier transitions the Visibility Buffer to `VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL`.
+     - `deferred.comp` runs: samples each pixel's 64-bit ID, loads triangle vertices from the global SSBOs, reconstructs 2D NDC barycentrics with perspective correction, evaluates texel footprint, and writes shaded PBR color to the swapchain image with **absolute zero overdraw**.
+   - **Phase E (Debug Overlay & Presentation)**:
+     - `imgui` renders the debug HUD (FPS, active LOD, meshlet culling counts, freeze camera toggle, manual LOD overrides).
+     - `engine.cpp` submits the command buffer and presents the swapchain image to the display.

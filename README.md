@@ -1,10 +1,10 @@
 # VK Game Engine
 
-[![Vulkan](https://img.shields.io/badge/Vulkan-1.3-ED1B24?style=for-the-badge&logo=vulkan&logoColor=white)](https://www.vulkan.org/)
-[![Platform](https://img.shields.io/badge/Platform-Windows%20x64-0078D6?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/maksim-sterkis/MaksimEngine-Showcase/releases)
-[![C++20](https://img.shields.io/badge/C%2B%2B-20-00599C?style=for-the-badge&logo=c%2B%2B&logoColor=white)](https://en.cppreference.com/w/cpp/20)
-[![Pipeline](https://img.shields.io/badge/Pipeline-Mesh%20Shaders%20%2B%20VisBuffer-orange?style=for-the-badge)](file.md)
-[![Release](https://img.shields.io/badge/Release-v0.1.0-8A2BE2?style=for-the-badge&logo=github)](https://github.com/maksim-sterkis/MaksimEngine-Showcase/releases)
+[![Vulkan](https://img.shields.io/badge/Vulkan-1.3-ED1B24?style=flat-square&logo=vulkan&logoColor=white)](https://www.vulkan.org/)
+[![Platform](https://img.shields.io/badge/Platform-Windows%20x64-0078D6?style=flat-square&logo=windows&logoColor=white)](https://github.com/maksim-sterkis/MaksimEngine-Showcase/releases)
+[![C++20](https://img.shields.io/badge/C%2B%2B-20-00599C?style=flat-square&logo=c%2B%2B&logoColor=white)](https://en.cppreference.com/w/cpp/20)
+[![Pipeline](https://img.shields.io/badge/Pipeline-Mesh%20Shaders%20%2B%20VisBuffer-orange?style=flat-square)](file.md)
+[![Release](https://img.shields.io/badge/Release-v0.1.0-8A2BE2?style=flat-square&logo=github)](https://github.com/maksim-sterkis/MaksimEngine-Showcase/releases)
 
 A modern Vulkan game engine written in C++20, designed with next-generation rendering techniques in mind.
 
@@ -41,7 +41,7 @@ For a complete breakdown of every directory, component, and the GPU pipeline flo
 > *Note: When viewing the chart on GitHub, be sure to click the **Fullscreen button** (the expanding arrows icon in the top right of the diagram box) so you can easily read the nodes and use the view controls.*
 
 ## Images
-<img width="2251" height="1185" alt="Screenshot 2026-07-09 175616" src="https://github.com/user-attachments/assets/51e2e0f5-ec02-458e-b2f3-72a4e18ddf5e" />
+<img src="https://github.com/user-attachments/assets/51e2e0f5-ec02-458e-b2f3-72a4e18ddf5e" alt="VK Game Engine - Meshlet LOD & Visibility Buffer Tech Demo" width="100%" />
 
 ## Release Downloads
 

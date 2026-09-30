@@ -8,7 +8,7 @@ A modern Vulkan game engine written in C++20, designed with next-generation rend
 - **Offline Asset Compiler**: Custom asset pipeline utilizing `fastgltf` and `tinyobjloader` to process `.obj` and `.gltf` source files into optimized, single-binary `.glb` payloads. Incorporates topological Pos+UV pre-welding to eliminate redundant normal-split locks without disturbing UV chart seams.
 - **Embedded Textures & Meshlets**: The compiler natively reads raw PBR texture files (JPEGs/PNGs) and packages them dynamically into the `.glb` buffers, and uses `meshoptimizer` to partition geometry into optimized Meshlets (max 64 vertices, 124 triangles) across 5 discrete LOD levels.
 - **5-Level Discrete Meshlet LODs**: Generates 5 progressive simplification levels (100%, 50%, 25%, 12.5%, 6.25%) using strict UV-preserving decimation (zero texture seam distortion or contour artifacts). Stores exact 3D triangle edge length metadata to drive runtime screen-space pixel projection metrics.
-- **Visibility Buffer Architecture**: Decouples geometry rasterization from heavy material evaluation. The raster pass writes a compact 64-bit ID `(meshletIndex, primitiveID)` to an `R32G32_UINT` target using `VK_KHR_fragment_shader_barycentric`. Material shading runs in a fullscreen compute pass (`shaders/deferred.comp`) with analytical 2D screen-space barycentric reconstruction, achieving absolute zero material overdraw.
+- **Visibility Buffer Architecture**: Decouples geometry rasterization from heavy material evaluation. The raster pass writes a compact 64-bit ID `(meshletIndex, primitiveID)` to an `R32G32_UINT` target. Material shading runs in a fullscreen compute pass (`shaders/deferred.comp`) with analytical 2D screen-space barycentric reconstruction, achieving absolute zero material overdraw.
 - **Two-Tier GPU Culling & Indirect Dispatch**: 
   - **Tier 1 (Instance Pre-Cull)**: Compute shader (`shaders/cull.comp`) evaluates 6-plane frustum tests and conservative multi-mip Hi-Z occlusion tests on instance bounding boxes, calculates projected screen-space triangle pixel size to dynamically select the LOD level, and writes `VkDrawMeshTasksIndirectCommandEXT` directly into GPU indirect buffers.
   - **Tier 2 (Meshlet Sub-Mesh Cull)**: Task shaders (`shaders/shader.task`) execute sub-mesh frustum, cone backface, and Hi-Z occlusion culling per meshlet, emitting surviving meshlets to the Mesh Shader (`shaders/shader.mesh`).
@@ -75,7 +75,3 @@ To run the engine itself:
 - [GLFW](https://www.glfw.org/)
 - [GLM](https://github.com/g-truc/glm)
 - [Dear ImGui](https://github.com/ocornut/imgui)
-
-## License
-
-This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.

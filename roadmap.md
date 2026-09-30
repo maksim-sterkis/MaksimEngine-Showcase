@@ -45,7 +45,7 @@ This plan outlines the next major architectural upgrades for the engine, focusin
 - **Goal**: Transition the engine to a true Visibility Buffer architecture and plug rendering bottlenecks.
 - **Why**: Decouples geometry rasterization from heavy material evaluation. By outputting only a 64-bit payload per pixel, we achieve absolute zero overdraw for complex PBR materials—critical for rendering millions of sub-pixel triangles (a la Nanite).
 - **Tasks Completed**:
-  1. Enabled `VK_KHR_fragment_shader_barycentric` on logical device.
+  1. Replaced hardware fragment shader barycentric extension requirement with analytical 2D screen-space barycentric reconstruction in compute, maximizing compatibility across NVIDIA, AMD, and Intel GPUs.
   2. Created `VK_FORMAT_R32G32_UINT` Visibility Buffer render target with proper layout transitions and barriers.
   3. Stripped `shader.mesh` to minimal vertex/primitive payload (`outMeshletIndex`, `perprimitiveEXT outPrimitiveID`), with `shader.frag` writing 64-bit IDs.
   4. Built fullscreen `deferred.comp` pass: fetches 3 vertices from GPU SSBOs, calculates exact 2D screen-space barycentrics in NDC, performs perspective-correct attribute reconstruction, and samples base albedo with zero overdraw and zero validation errors.
@@ -55,6 +55,17 @@ This plan outlines the next major architectural upgrades for the engine, focusin
      - Strictly preserved UV chart boundaries with progressive `meshopt_simplify` across 5 discrete LOD levels (100%, 50%, 25%, 12.5%, 6.25%), eliminating contour-stripe distortion.
      - Calculated exact 3D triangle edge length $L_{\text{tri}}$ and implemented screen-space triangle pixel projection math in `cull.comp` (stepping up LOD when triangles project $< 3.0\text{ px}$).
      - Implemented dynamic texel footprint calculation and hardware trilinear mipmapping in `deferred.comp` with active LOD clamping, F2 camera freeze, and manual F3 ImGui overrides.
+
+## Phase 3.6 (Virtual File System & Release Packaging)
+- **Status**: **COMPLETED**
+- **Goal**: Implement a high-performance Virtual File System (VFS) and an automated production release pipeline.
+- **Why**: Eliminates loose shader and asset dependencies, packs game assets into an obfuscated, single-binary container (`engine.pak`) for distribution, and enables zero-dependency portable deployment on clean machines.
+- **Tasks Completed**:
+  1. Designed and built `vfs::initialize()`, `read_file()`, and `get_file_span()` utilizing memory-mapped files (`CreateFileMapping` / `MapViewOfFile`) on Windows with transparent fallback to loose disk files for dev mode.
+  2. Implemented `tools/pak_compiler.cpp` to bundle SPIR-V shaders, GLB models, and KTX2/raw textures into contiguous `engine.pak` archives with 128-byte normalized path headers.
+  3. Created `package_release.ps1` to automate CMake Release configuration, `-O3` compilation, symbol stripping (`strip -s`), static MinGW runtime linking (`-static -static-libgcc -static-libstdc++`), and portable `.zip` generation.
+  4. Added GPU scoring in `src/device.cpp` to automatically prioritize discrete GPUs over integrated graphics on hybrid systems.
+  5. Gated validation layers behind `NDEBUG` so packaged release builds run cleanly without requiring the Vulkan SDK or Khronos validation layer runtime.
 
 ## Phase 4 (Hardware Ray Tracing - RT Pipeline)
 - **Status**: **PENDING**

@@ -2,9 +2,10 @@
 graph TD
     %% Step 1
     subgraph Step 1: Bootstrapping
-        Main1[main.cpp] -->|engine::init| Engine[engine.cpp]
+        Main1[main.cpp] -->|vfs::initialize| VFS[VFS: engine.pak / Disk Fallback]
+        Main1 -->|engine::init| Engine[engine.cpp]
         Engine --> Win[window: GLFW]
-        Engine --> Dev[device: Vulkan 1.2 + Mesh + Barycentric]
+        Engine --> Dev[device: Vulkan 1.3 + Mesh Shaders + Discrete GPU Scoring]
         Engine --> Swap[swapchain: VisBuffer R32G32_UINT + Depth]
         Engine --> Pipe[pipeline: Graphics & Compute Pipelines]
     end

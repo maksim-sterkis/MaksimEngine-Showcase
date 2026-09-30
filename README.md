@@ -13,6 +13,7 @@ A modern Vulkan game engine written in C++20, designed with next-generation rend
   - **Tier 1 (Instance Pre-Cull)**: Compute shader (`shaders/cull.comp`) evaluates 6-plane frustum tests and conservative multi-mip Hi-Z occlusion tests on instance bounding boxes, calculates projected screen-space triangle pixel size to dynamically select the LOD level, and writes `VkDrawMeshTasksIndirectCommandEXT` directly into GPU indirect buffers.
   - **Tier 2 (Meshlet Sub-Mesh Cull)**: Task shaders (`shaders/shader.task`) execute sub-mesh frustum, cone backface, and Hi-Z occlusion culling per meshlet, emitting surviving meshlets to the Mesh Shader (`shaders/shader.mesh`).
 - **Dynamic Asset Pool**: Robust texture and model pooling system preventing duplicate GPU uploads and seamlessly switching between raw JPEG/PNG loading (using `stb_image`) and compressed formats.
+- **Virtual File System (VFS) & Asset Packaging**: Custom memory-mapped binary archive (`engine.pak`) system with zero-copy I/O streaming, packaging compiled SPIR-V shaders, multi-LOD meshlet models, and textures into an obfuscated single binary distribution with transparent disk fallback for rapid local development.
 - **PBR Materials**: Complete physical based rendering foundation with Cook-Torrance BRDF (Albedo, Normal, Metallic, Roughness) via SSBOs.
 - **Hardware Texture Mipmapping**: Generates full mip chains via `vkCmdBlitImage`. Samples trilinear mipmaps in deferred compute using dynamic screen-space texel footprint estimation clamped to the active mesh LOD level for seamless distance transitions.
 - **Perfect Memory Packing**: Uses `GL_EXT_scalar_block_layout` to map C++ structs exactly to GPU memory without any padding overhead.
@@ -36,35 +37,9 @@ For a complete breakdown of every directory, component, and the GPU pipeline flo
 ## Images
 <img width="2251" height="1185" alt="Screenshot 2026-07-09 175616" src="https://github.com/user-attachments/assets/51e2e0f5-ec02-458e-b2f3-72a4e18ddf5e" />
 
-## Build Instructions
+## Release Downloads
 
-### Prerequisites
-- **CMake** 3.20+
-- **C++20** compliant compiler (GCC/MinGW, MSVC, or Clang)
-- **Vulkan SDK** 1.2+
-
-### Building
-
-The project uses CMake to fetch dependencies (like `fastgltf`, `glfw`, `glm`, `imgui`) automatically.
-
-```bash
-mkdir build
-cd build
-cmake ..
-cmake --build .
-```
-
-### Running
-
-To run the offline model compiler to package your assets (put source models in `assets/models/obj`):
-```bash
-./build/model_compiler.exe
-```
-
-To run the engine itself:
-```bash
-./build/VK_game_engine.exe
-```
+Standalone, zero-dependency portable release archives (Windows 64-bit) are available on the [GitHub Releases](https://github.com/maksim-sterkis/MaksimEngine-Showcase/releases) page. Simply download, extract, and launch `VK_game_engine.exe`.
 
 ## Credits & Dependencies
 - [Vulkan](https://www.vulkan.org/)

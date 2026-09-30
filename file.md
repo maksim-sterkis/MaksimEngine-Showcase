@@ -7,10 +7,9 @@ This document explains **every single file** in the `VK_game_engine` project and
 
 ## `src/` (Core Engine Framework)
 ### Vulkan Setup & Hardware
-- **`src/device.hpp` / `.cpp`**: Handles low-level GPU initialization. Creates the Vulkan `VkInstance`, queries and selects the `VkPhysicalDevice` (GPU), creates the logical `VkDevice`, sets up queue families, creates the Command Pool, and enables critical modern device features:
+- **`src/device.hpp` / `.cpp`**: Handles low-level GPU initialization. Creates the Vulkan `VkInstance`, queries and scores all available `VkPhysicalDevice` candidates (prioritizing dedicated discrete GPUs over integrated ones), creates the logical `VkDevice`, sets up queue families, creates the Command Pool, and enables critical modern device features:
   - `VK_EXT_descriptor_indexing` (Bindless textures and unbounded arrays)
   - `VK_EXT_mesh_shader` (Task and Mesh shaders)
-  - `VK_KHR_fragment_shader_barycentric` (Hardware barycentric coordinates)
   - `VK_EXT_scalar_block_layout` (Perfect C++ to GPU struct memory alignment)
 - **`src/swapchain.hpp` / `.cpp`**: Manages the Vulkan Swapchain (the array of images presented to the screen). Handles querying surface capabilities, selecting present modes (Mailbox/Vsync), recreating the swapchain on resize, and allocating the **`VK_FORMAT_R32G32_UINT` Visibility Buffer** image alongside the Depth Buffer.
 - **`src/engine.hpp` / `.cpp`**: The central orchestrator for the engine framework. It bundles `Device`, `Window`, and `Swapchain`. Manages frame synchronization (Fences and Semaphores), per-frame staging buffers, GPU indirect buffers (`VkDrawMeshTasksIndirectCommandEXT`), GPU instance buffers (`InstanceDataSSBO`), Hi-Z depth pyramid downsampling, fullscreen compute dispatches (`cull.comp`, `deferred.comp`), and presentation.
@@ -19,6 +18,9 @@ This document explains **every single file** in the `VK_game_engine` project and
   - **Cull Compute Pipeline**: Compiles `cull.comp` for object-level frustum, Hi-Z, and LOD selection.
   - **Deferred Resolve Compute Pipeline**: Compiles `deferred.comp` for fullscreen Visibility Buffer decoding and PBR evaluation.
   - Configures the **Bindless Global Descriptor Set Layout** (Binding 0: SSBO array, Binding 1: texture sampler array) and defines `PushConstantData`.
+
+### Virtual File System (VFS)
+- **`src/vfs.hpp` / `.cpp`**: High-performance Virtual File System. Implements memory-mapped binary archive streaming (`engine.pak`) via Windows `CreateFileMapping` / `MapViewOfFile` with zero-copy binary slice access (`std::span`), accompanied by transparent fallback to loose disk files when running in developer mode.
 
 ### Windowing & Input
 - **`src/window.hpp` / `.cpp`**: An abstraction over the GLFW library. Creates the OS window, handles fullscreen/borderless toggling, registers resize callbacks, and tracks the window surface.
@@ -31,7 +33,7 @@ This document explains **every single file** in the `VK_game_engine` project and
 
 ### Assets & Bindless Resources
 - **`src/asset_pool.hpp` / `.cpp`**: The heart of the engine's Bindless architecture. It acts as a global registry holding all loaded `ModelData` and `TextureData`. Compiles the massive `MaterialSSBO` (Storage Buffer) and writes all texture samplers into the single Global Descriptor Set array.
-- **`src/model.hpp` / `.cpp`**: Uses `fastgltf` to parse binary `.glb` files. Parses multi-LOD meshlet headers ("MLOD"), stores up to 8 discrete LOD levels with individual meshlet counts, offsets, and average 3D triangle edge lengths $L_{\text{tri}}$, and allocates GPU SSBO buffers for vertices, meshlets, vertex indices, and triangle indices.
+- **`src/model.hpp` / `.cpp`**: Uses `fastgltf` to parse binary `.glb` files streamed through the VFS. Parses multi-LOD meshlet headers ("MLOD"), stores up to 8 discrete LOD levels with individual meshlet counts, offsets, and average 3D triangle edge lengths $L_{\text{tri}}$, and allocates GPU SSBO buffers for vertices, meshlets, vertex indices, and triangle indices.
 - **`src/texture.hpp` / `.cpp`**: Responsible for decoding images into VRAM. Decodes standard formats (PNG/JPG) using `stb_image`, generates complete trilinear mipmap chains down to $1\times 1$ via `vkCmdBlitImage`, and creates `VkSampler` objects with anisotropic filtering.
 
 ## `shaders/` (GPU Programs)
@@ -41,7 +43,7 @@ This document explains **every single file** in the `VK_game_engine` project and
 - **`shaders/shader.frag`**: The Visibility Buffer fragment shader. Writes the 64-bit compact ID payload `uvec2((instanceId << 20) | inMeshletIndex, inPrimitiveID)` directly into the `R32G32_UINT` Visibility Buffer.
 - **`shaders/deferred.comp`**: The Fullscreen Visibility Buffer Resolve Compute Shader. Decodes pixel IDs from `inVisibility`, loads the 3 triangle vertices from Bindless SSBOs, analytically reconstructs 2D screen-space barycentric coordinates in NDC, calculates perspective-correct attribute weights, evaluates texel footprint, and samples the Bindless PBR textures with hardware trilinear mipmapping and zero overdraw.
 
-## `tools/` (Offline Asset Pipeline)
+## `tools/` (Offline Asset Pipeline & Packaging)
 - **`tools/model_compiler.cpp`**: Standalone offline asset pipeline. Reads raw `.gltf` and `.obj` files:
   1. Deduplicates normal-split duplicate vertices using `meshopt_generateVertexRemapMulti` on `(Position, UV)` while strictly preserving genuine UV chart boundaries.
   2. Generates 5 discrete progressive LOD levels (100%, 50%, 25%, 12.5%, 6.25%) using strict `meshopt_simplify` to guarantee zero texture seam distortion or contour artifacts.
@@ -50,6 +52,8 @@ This document explains **every single file** in the `VK_game_engine` project and
   5. Remaps vertex indices back to original vertex buffers via `remapToOriginal`.
   6. Packages the geometry, embedded textures, and multi-LOD meshlet streams into a single, dense `.glb` binary payload.
 - **`tools/texture_compiler.cpp`**: Helper tool used for batch conversions of raw texture directories into `KTX2` format.
+- **`tools/pak_compiler.cpp`**: Asset packaging tool that bundles compiled SPIR-V shaders, GLB models, and textures into an indexed, contiguous memory-mapped binary archive (`engine.pak`) for distribution.
+- **`package_release.ps1`**: Master packaging automation script. Reconfigures CMake with `-DCMAKE_BUILD_TYPE=Release` (defining `NDEBUG` to strip validation layers), builds optimized targets with static MinGW runtime linking, compiles `engine.pak`, strips symbols, and packages a zero-dependency portable `.zip`.
 
 ---
 

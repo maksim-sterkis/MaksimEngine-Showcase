@@ -2,39 +2,36 @@
 
 This document explains **every single file** in the `VK_game_engine` project and how they interact to form a modern GPU-driven Vulkan engine.
 
-## `game/` (Entry Point & Gameplay)
-- **`game/main.cpp`**: The primary entry point. Initializes the engine via `engine::init()`, loads assets (`asset_pool`), creates ECS entities (`MeshRenderer`, `Transform`), manages camera inputs, provides ImGui debug controls (freeze culling camera, manual LOD 0–4 overrides, meshlet debug coloring), updates logic, and drives the `draw_scene` rendering loop.
+## `demo/` (Interactive Tech Demo Entry Point)
+- **`demo/main.cpp`**: The primary executable entry point. Initializes the engine via `engine::init()`, loads assets (`asset_pool`), creates ECS entities (`MeshRenderer`, `Transform`), manages camera inputs, provides ImGui debug controls (freeze culling camera, manual LOD 0–4 overrides, meshlet debug coloring), updates frame logic, and drives the `draw_scene` rendering loop.
 
 ## `src/` (Core Engine Framework)
-### Vulkan Setup & Hardware
-- **`src/device.hpp` / `.cpp`**: Handles low-level GPU initialization. Creates the Vulkan `VkInstance`, queries and scores all available `VkPhysicalDevice` candidates (prioritizing dedicated discrete GPUs over integrated ones), creates the logical `VkDevice`, sets up queue families, creates the Command Pool, and enables critical modern device features:
+
+### `src/core/` (Platform, Windowing, Input & VFS)
+- **`src/core/window.hpp` / `.cpp`**: An abstraction over the GLFW library. Creates the OS window, handles fullscreen/borderless toggling, registers resize callbacks, and tracks the window surface.
+- **`src/core/input.hpp` / `.cpp`**: GLFW input system wrapper. Tracks keyboard key states (including F2 for freeze culling camera and F3 for debug UI) and mouse cursor movement, allowing `main.cpp` and `camera.cpp` to respond smoothly to user input.
+- **`src/core/vfs.hpp` / `.cpp`**: Virtual File System. Implements memory-mapped binary archive streaming (`engine.pak`) via Windows `CreateFileMapping` / `MapViewOfFile` with zero-copy binary slice access (`std::span`), accompanied by transparent fallback to loose disk files when running in developer mode.
+- **`src/core/camera.hpp` / `.cpp`**: Manages the 3D camera. Uses the `input` system to move around (WASD/Mouse), extracts 6 frustum planes, and calculates the View and Projection matrices sent to GPU shaders via PushConstants.
+
+### `src/renderer/` (Vulkan Setup & GPU Pipeline)
+- **`src/renderer/device.hpp` / `.cpp`**: Handles low-level GPU initialization. Creates the Vulkan `VkInstance`, queries and scores all available `VkPhysicalDevice` candidates (prioritizing dedicated discrete GPUs over integrated ones), creates the logical `VkDevice`, sets up queue families, creates the Command Pool, and enables critical modern device features:
   - `VK_EXT_descriptor_indexing` (Bindless textures and unbounded arrays)
   - `VK_EXT_mesh_shader` (Task and Mesh shaders)
   - `VK_EXT_scalar_block_layout` (Scalar block layout matching C++ structs to GPU buffers without manual alignment padding)
-- **`src/swapchain.hpp` / `.cpp`**: Manages the Vulkan Swapchain (the array of images presented to the screen). Handles querying surface capabilities, selecting present modes (Mailbox/Vsync), recreating the swapchain on resize, and allocating the **`VK_FORMAT_R32G32_UINT` Visibility Buffer** image alongside the Depth Buffer.
-- **`src/engine.hpp` / `.cpp`**: The central orchestrator for the engine framework. It bundles `Device`, `Window`, and `Swapchain`. Manages frame synchronization (Fences and Semaphores), per-frame staging buffers, GPU indirect buffers (`VkDrawMeshTasksIndirectCommandEXT`), GPU instance buffers (`InstanceDataSSBO`), Hi-Z depth pyramid downsampling, fullscreen compute dispatches (`cull.comp`, `deferred.comp`), and presentation.
-- **`src/pipeline.hpp` / `.cpp`**: Defines the Graphics and Compute Pipelines:
+- **`src/renderer/swapchain.hpp` / `.cpp`**: Manages the Vulkan Swapchain (the array of images presented to the screen). Handles querying surface capabilities, selecting present modes (Mailbox/Vsync), recreating the swapchain on resize, and allocating the **`VK_FORMAT_R32G32_UINT` Visibility Buffer** image alongside the Depth Buffer.
+- **`src/renderer/engine.hpp` / `.cpp`**: The central orchestrator for the engine framework. It bundles `Device`, `Window`, and `Swapchain`. Manages frame synchronization (Fences and Semaphores), per-frame staging buffers, GPU indirect buffers (`VkDrawMeshTasksIndirectCommandEXT`), GPU instance buffers (`InstanceDataSSBO`), Hi-Z depth pyramid downsampling, fullscreen compute dispatches (`cull.comp`, `deferred.comp`), and presentation.
+- **`src/renderer/pipeline.hpp` / `.cpp`**: Defines the Graphics and Compute Pipelines:
   - **Visibility Graphics Pipeline**: Compiles `shader.task`, `shader.mesh`, and `shader.frag`, rendering directly to the 64-bit Visibility Buffer.
   - **Cull Compute Pipeline**: Compiles `cull.comp` for object-level frustum, Hi-Z, and LOD selection.
   - **Deferred Resolve Compute Pipeline**: Compiles `deferred.comp` for fullscreen Visibility Buffer decoding and PBR evaluation.
   - Configures the **Bindless Global Descriptor Set Layout** (Binding 0: SSBO array, Binding 1: texture sampler array) and defines `PushConstantData`.
+- **`src/renderer/imgui.hpp` / `.cpp`**: Integration of Dear ImGui with Vulkan. Sets up the ImGui context, allocates dedicated descriptor pools, and handles rendering real-time performance stats (active LOD, meshlet counters, triangle counts, freeze toggles).
 
-### Virtual File System (VFS)
-- **`src/vfs.hpp` / `.cpp`**: Virtual File System. Implements memory-mapped binary archive streaming (`engine.pak`) via Windows `CreateFileMapping` / `MapViewOfFile` with zero-copy binary slice access (`std::span`), accompanied by transparent fallback to loose disk files when running in developer mode.
-
-### Windowing & Input
-- **`src/window.hpp` / `.cpp`**: An abstraction over the GLFW library. Creates the OS window, handles fullscreen/borderless toggling, registers resize callbacks, and tracks the window surface.
-- **`src/input.hpp` / `.cpp`**: GLFW input system wrapper. Tracks keyboard key states (including F2 for freeze culling camera and F3 for debug UI) and mouse cursor movement, allowing `main.cpp` and `camera.cpp` to respond smoothly to user input.
-
-### Utilities & Logic
-- **`src/ecs.hpp` / `.cpp`**: A custom, lightweight Entity Component System (ECS). Uses `entt`-style sparse sets to manage `Entity` IDs and their attached components (`Transform`, `MeshRenderer`).
-- **`src/camera.hpp` / `.cpp`**: Manages the 3D camera. Uses the `input` system to move around (WASD/Mouse), extracts 6 frustum planes, and calculates the View and Projection matrices sent to GPU shaders via PushConstants.
-- **`src/imgui.hpp` / `.cpp`**: Integration of Dear ImGui with Vulkan. Sets up the ImGui context, allocates dedicated descriptor pools, and handles rendering real-time performance stats (active LOD, meshlet counters, triangle counts, freeze toggles).
-
-### Assets & Bindless Resources
-- **`src/asset_pool.hpp` / `.cpp`**: Central asset registry holding loaded `ModelData` and `TextureData`. Compiles the global `MaterialSSBO` and registers texture samplers into the Global Descriptor Set array.
-- **`src/model.hpp` / `.cpp`**: Uses `fastgltf` to parse binary `.glb` files streamed through the VFS. Parses multi-LOD meshlet headers ("MLOD"), stores up to 8 discrete LOD levels with individual meshlet counts, offsets, and average 3D triangle edge lengths $L_{\text{tri}}$, and allocates GPU SSBO buffers for vertices, meshlets, vertex indices, and triangle indices.
-- **`src/texture.hpp` / `.cpp`**: Responsible for decoding images into VRAM. Decodes standard formats (PNG/JPG) using `stb_image`, generates complete trilinear mipmap chains down to $1\times 1$ via `vkCmdBlitImage`, and creates `VkSampler` objects with anisotropic filtering.
+### `src/scene/` (Scene, Assets & Resources)
+- **`src/scene/asset_pool.hpp` / `.cpp`**: Central asset registry holding loaded `ModelData` and `TextureData`. Compiles the global `MaterialSSBO` and registers texture samplers into the Global Descriptor Set array.
+- **`src/scene/model.hpp` / `.cpp`**: Uses `fastgltf` to parse binary `.glb` files streamed through the VFS. Parses multi-LOD meshlet headers ("MLOD"), stores up to 8 discrete LOD levels with individual meshlet counts, offsets, and average 3D triangle edge lengths $L_{\text{tri}}$, and allocates GPU SSBO buffers for vertices, meshlets, vertex indices, and triangle indices.
+- **`src/scene/texture.hpp` / `.cpp`**: Responsible for decoding images into VRAM. Decodes standard formats (PNG/JPG) using `stb_image`, generates complete trilinear mipmap chains down to $1\times 1$ via `vkCmdBlitImage`, and creates `VkSampler` objects with anisotropic filtering.
+- **`src/scene/ecs.hpp` / `.cpp`**: A custom, lightweight Entity Component System (ECS). Uses `entt`-style sparse sets to manage `Entity` IDs and their attached components (`Transform`, `MeshRenderer`).
 
 ## `shaders/` (GPU Programs)
 - **`shaders/cull.comp`**: The Tier-1 GPU Compute Pre-Cull shader. Evaluates 6-plane frustum culling and conservative multi-mip Hi-Z occlusion tests on instance bounding boxes. Calculates screen-space projected triangle pixel dimensions to select the optimal discrete LOD (LOD 0 to 4), writes `VkDrawMeshTasksIndirectCommandEXT` directly into an indirect SSBO, and populates draw counts.
@@ -59,8 +56,8 @@ This document explains **every single file** in the `VK_game_engine` project and
 
 ## How They Connect (The Complete Pipeline Flow)
 
-1. **Bootstrapping**: `main.cpp` calls `engine::init()`, which initializes `window`, `device`, `swapchain`, and `pipeline` in order, setting up both graphics and compute pipelines and allocating the Visibility Buffer and Depth targets.
-2. **Asset Loading**: `main.cpp` requests models through `asset_pool`. `model::load_glb()` loads the multi-LOD meshlet payload, pushes vertex/meshlet SSBOs to VRAM, extracts embedded textures, and `texture.cpp` generates trilinear mipmap chains.
+1. **Bootstrapping**: `demo/main.cpp` calls `engine::init()`, which initializes `window`, `device`, `swapchain`, and `pipeline` in order, setting up both graphics and compute pipelines and allocating the Visibility Buffer and Depth targets.
+2. **Asset Loading**: `demo/main.cpp` requests models through `asset_pool`. `model::load_glb()` loads the multi-LOD meshlet payload, pushes vertex/meshlet SSBOs to VRAM, extracts embedded textures, and `texture.cpp` generates trilinear mipmap chains.
 3. **Bindless Sync**: `asset_pool::build_materials_ssbo()` compiles all material properties into the global `MaterialSSBO` and registers all texture views/samplers into the single unbounded Global Descriptor Set.
 4. **Logic Update**: In the frame loop, `input` processes keyboard/mouse events, `camera` computes the View/Projection matrices and frustum planes, and active ECS entities update their `Transform` components.
 5. **Rendering Pass**:

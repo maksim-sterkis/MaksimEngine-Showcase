@@ -3,7 +3,7 @@
 [![Vulkan](https://img.shields.io/badge/Vulkan-1.3-ED1B24?style=for-the-badge&logo=vulkan&logoColor=white)](https://www.vulkan.org/)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20x64-0078D6?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/maksim-sterkis/MaksimEngine-Showcase/releases)
 [![C++20](https://img.shields.io/badge/C%2B%2B-20-00599C?style=for-the-badge&logo=c%2B%2B&logoColor=white)](https://en.cppreference.com/w/cpp/20)
-[![Pipeline](https://img.shields.io/badge/Pipeline-Mesh%20Shaders%20%2B%20VisBuffer-orange?style=for-the-badge)](file.md)
+[![Pipeline](https://img.shields.io/badge/Pipeline-Mesh%20Shaders%20%2B%20VisBuffer-orange?style=for-the-badge)](docs/file.md)
 [![Release](https://img.shields.io/badge/Release-v0.1.0-8A2BE2?style=for-the-badge&logo=github)](https://github.com/maksim-sterkis/MaksimEngine-Showcase/releases)
 
 A Vulkan 1.3 experimental rendering engine written in C++20, implementing a modern GPU-driven pipeline with mesh shaders, visibility buffer shading, discrete meshlet LODs, and hierarchical-Z occlusion culling.
@@ -29,13 +29,13 @@ A Vulkan 1.3 experimental rendering engine written in C++20, implementing a mode
 2. **ReSTIR DI / GI**: Reservoir-based spatiotemporal importance resampling for direct and indirect lighting.
 3. **Temporal Denoising (SVGF)**: Spatiotemporal variance-guided filtering to filter stochastic ray-traced lighting passes.
 
-Check out the [full roadmap](roadmap.md) for detailed progress and upcoming milestones.
+Check out the [full roadmap](docs/roadmap.md) for detailed progress and upcoming milestones.
 
 ## Code Architecture
 
-For a complete breakdown of every directory, component, and the GPU pipeline flow, see the [File Architecture Documentation](file.md).
+For a complete breakdown of every directory, component, and the GPU pipeline flow, see the [File Architecture Documentation](docs/file.md).
 
-> **Visualizing the Engine:** We also have an interactive Mermaid.js diagram showing exactly how data moves from CPU to GPU. Check out the **[Pipeline Flowchart](flow.md)**. 
+> **Visualizing the Engine:** We also have an interactive Mermaid.js diagram showing exactly how data moves from CPU to GPU. Check out the **[Pipeline Flowchart](docs/flow.md)**. 
 > 
 > *Note: When viewing the chart on GitHub, be sure to click the **Fullscreen button** (the expanding arrows icon in the top right of the diagram box) so you can easily read the nodes and use the view controls.*
 

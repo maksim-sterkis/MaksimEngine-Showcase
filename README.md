@@ -6,29 +6,28 @@
 [![Pipeline](https://img.shields.io/badge/Pipeline-Mesh%20Shaders%20%2B%20VisBuffer-orange?style=for-the-badge)](file.md)
 [![Release](https://img.shields.io/badge/Release-v0.1.0-8A2BE2?style=for-the-badge&logo=github)](https://github.com/maksim-sterkis/MaksimEngine-Showcase/releases)
 
-A modern Vulkan game engine written in C++20, designed with next-generation rendering techniques in mind.
+A Vulkan 1.3 experimental rendering engine written in C++20, implementing a modern GPU-driven pipeline with mesh shaders, visibility buffer shading, discrete meshlet LODs, and hierarchical-Z occlusion culling.
 
 ## Features
 
-- **Bindless Architecture**: Utilizes Vulkan 1.2 Descriptor Indexing (`VK_EXT_descriptor_indexing`) to drastically reduce CPU overhead during draw calls. An unbounded array of 100,000 descriptors allows for virtually limitless textures and materials mapped directly via PushConstants.
-- **Offline Asset Compiler**: Custom asset pipeline utilizing `fastgltf` and `tinyobjloader` to process `.obj` and `.gltf` source files into optimized, single-binary `.glb` payloads. Incorporates topological Pos+UV pre-welding to eliminate redundant normal-split locks without disturbing UV chart seams.
-- **Embedded Textures & Meshlets**: The compiler natively reads raw PBR texture files (JPEGs/PNGs) and packages them dynamically into the `.glb` buffers, and uses `meshoptimizer` to partition geometry into optimized Meshlets (max 64 vertices, 124 triangles) across 5 discrete LOD levels.
-- **5-Level Discrete Meshlet LODs**: Generates 5 progressive simplification levels (100%, 50%, 25%, 12.5%, 6.25%) using strict UV-preserving decimation (zero texture seam distortion or contour artifacts). Stores exact 3D triangle edge length metadata to drive runtime screen-space pixel projection metrics.
-- **Visibility Buffer Architecture**: Decouples geometry rasterization from heavy material evaluation. The raster pass writes a compact 64-bit ID `(meshletIndex, primitiveID)` to an `R32G32_UINT` target. Material shading runs in a fullscreen compute pass (`shaders/deferred.comp`) with analytical 2D screen-space barycentric reconstruction, achieving absolute zero material overdraw.
-- **Two-Tier GPU Culling & Indirect Dispatch**: 
-  - **Tier 1 (Instance Pre-Cull)**: Compute shader (`shaders/cull.comp`) evaluates 6-plane frustum tests and conservative multi-mip Hi-Z occlusion tests on instance bounding boxes, calculates projected screen-space triangle pixel size to dynamically select the LOD level, and writes `VkDrawMeshTasksIndirectCommandEXT` directly into GPU indirect buffers.
-  - **Tier 2 (Meshlet Sub-Mesh Cull)**: Task shaders (`shaders/shader.task`) execute sub-mesh frustum, cone backface, and Hi-Z occlusion culling per meshlet, emitting surviving meshlets to the Mesh Shader (`shaders/shader.mesh`).
-- **Dynamic Asset Pool**: Robust texture and model pooling system preventing duplicate GPU uploads and seamlessly switching between raw JPEG/PNG loading (using `stb_image`) and compressed formats.
-- **Virtual File System (VFS) & Asset Packaging**: Custom memory-mapped binary archive (`engine.pak`) system with zero-copy I/O streaming, packaging compiled SPIR-V shaders, multi-LOD meshlet models, and textures into an obfuscated single binary distribution with transparent disk fallback for rapid local development.
-- **PBR Materials**: Complete physical based rendering foundation with Cook-Torrance BRDF (Albedo, Normal, Metallic, Roughness) via SSBOs.
-- **Hardware Texture Mipmapping**: Generates full mip chains via `vkCmdBlitImage`. Samples trilinear mipmaps in deferred compute using dynamic screen-space texel footprint estimation clamped to the active mesh LOD level for seamless distance transitions.
-- **Perfect Memory Packing**: Uses `GL_EXT_scalar_block_layout` to map C++ structs exactly to GPU memory without any padding overhead.
+- **Visibility Buffer Shading**: Decouples geometry rasterization from material evaluation. The geometry pass rasterizes 64-bit IDs `(meshletIndex, primitiveID)` to an `R32G32_UINT` attachment. A fullscreen compute pass (`shaders/deferred.comp`) reconstructs screen-space barycentric coordinates and evaluates PBR materials only on visible pixels, avoiding redundant fragment shading on occluded surfaces.
+- **Meshlet Pipeline**: Geometry is partitioned into meshlets (up to 64 vertices, 124 triangles) using `meshoptimizer` and rendered via Task and Mesh shaders (`VK_EXT_mesh_shader`).
+- **Two-Phase GPU Culling & Indirect Dispatch**:
+  - *Instance Pre-Cull (`shaders/cull.comp`)*: Evaluates bounding box frustum culling and Hi-Z occlusion tests, selects the active LOD step based on projected screen-space triangle dimensions, and writes indirect draw commands (`VkDrawMeshTasksIndirectCommandEXT`).
+  - *Meshlet Culling (`shaders/shader.task`)*: Evaluates meshlet bounding spheres against the view frustum, cone backface orientation, and conservative Hi-Z occlusion before emitting surviving meshlets to the mesh shader.
+- **5-Level Discrete Meshlet LODs**: Generates 5 progressive simplification steps (100%, 50%, 25%, 12.5%, 6.25%) with embedded 3D triangle edge length metadata to drive runtime screen-space pixel projection metrics.
+- **Bindless Descriptors**: Uses Vulkan descriptor indexing (`VK_EXT_descriptor_indexing`) with unbounded descriptor arrays for textures and SSBOs, indexing materials and resources directly via PushConstants without per-draw binding changes.
+- **Offline Asset Compiler**: Standalone tool (`tools/model_compiler.cpp`) using `fastgltf` and `tinyobjloader` to process `.gltf` and `.obj` assets into `.glb` files with embedded meshlet streams, LOD levels, and textures. Welds normal-split vertices sharing UV coordinates prior to simplification to preserve texture chart seams.
+- **Virtual File System (VFS)**: Packages SPIR-V shaders, models, and textures into a single archive (`engine.pak`) accessed via memory-mapping on Windows, with automatic disk fallback for loose files during development.
+- **PBR Shading**: Evaluates Cook-Torrance BRDF (Albedo, Normal, Metallic, Roughness) with material parameters fetched from a global SSBO.
+- **Hardware Texture Mipmapping**: Generates mipmaps via `vkCmdBlitImage`. Samples trilinear mip levels in deferred compute using screen-space texel footprint estimation clamped to the active mesh LOD level.
+- **Scalar Block Layout**: Uses `GL_EXT_scalar_block_layout` so C++ structs and shader storage buffers share matching memory layout without manual alignment padding.
 
 ## Roadmap & Upcoming Features
 
-1. **Hardware Ray Tracing**: Leverage `VK_KHR_ray_tracing_pipeline` (RT cores) for precise shadows, reflections, and ambient occlusion using BLAS/TLAS acceleration structures built from meshlet LODs.
-2. **ReSTIR DI / GI**: State-of-the-art reservoir spatiotemporal importance resampling for real-time direct and global illumination.
-3. **Temporal Denoising (SVGF)**: Spatiotemporal variance-guided filtering to denoise stochastic ray-traced lighting passes.
+1. **Hardware Ray Tracing**: Ray-traced shadows, ambient occlusion, and reflections using `VK_KHR_ray_tracing_pipeline` with BLAS/TLAS structures built from mesh geometry.
+2. **ReSTIR DI / GI**: Reservoir-based spatiotemporal importance resampling for direct and indirect lighting.
+3. **Temporal Denoising (SVGF)**: Spatiotemporal variance-guided filtering to filter stochastic ray-traced lighting passes.
 
 Check out the [full roadmap](roadmap.md) for detailed progress and upcoming milestones.
 

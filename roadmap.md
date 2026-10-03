@@ -4,8 +4,8 @@ This plan outlines the next major architectural upgrades for the engine, focusin
 
 ## Phase 0 (Asset Pipeline & KTX2 Compression)
 - **Status**: **COMPLETED**
-- **Goal**: Built an offline model compiler that parses `.gltf` and `.obj` files using `fastgltf` and `tinyobjloader`, compresses raw textures into `KTX2 UASTC` format using `toktx`, and packages them natively into optimized binary `.glb` files.
-- **Why**: Allows the engine to load massive Poly Haven PBR assets instantly, streaming pre-compressed textures directly to VRAM in `BC7` format to save gigabytes of memory.
+- **Goal**: Built an offline model compiler that parses `.gltf` and `.obj` files using `fastgltf` and `tinyobjloader`, compresses raw textures into `KTX2 UASTC` format using `toktx`, and packages them into binary `.glb` files.
+- **Why**: Allows the engine to load Poly Haven PBR assets with pre-compressed KTX2/BC7 textures streamed to VRAM, reducing memory footprint.
 
 ## Phase 0.5 (Fix GLB Texture Embedding)
 - **Status**: **COMPLETED**
@@ -33,33 +33,33 @@ This plan outlines the next major architectural upgrades for the engine, focusin
 ## Phase 3 (Meshlets & Advanced Culling)
 - **Status**: **COMPLETED**
 - **Goal**: Replace legacy vertex pipelines with Task/Mesh shaders (`VK_EXT_mesh_shader`) featuring sub-mesh level Frustum, Cone Backface, and Hi-Z Occlusion Culling.
-- **Why**: Unlocks extreme GPU geometry culling at a sub-mesh granularity, evaluating thousands of meshlets in fractions of a millisecond.
+- **Why**: Enables GPU geometry culling at a sub-mesh granularity, evaluating meshlets efficiently in task shaders.
 - **Tasks Completed**:
   1. Offline tool extension to partition `ModelData` into meshlets (max 64 vertices, 124 triangles) using `meshoptimizer`.
   2. Create Task and Mesh shaders to evaluate bounding spheres, extract frustum planes, and emit visible meshlets.
-  3. Generate and bind a multi-mip Hi-Z depth pyramid for mathematically perfect, conservative occlusion culling.
-  4. Implement ultra-fast SSBO atomic counters to safely track evaluated vs. drawn meshlets without triggering Nvidia driver bottlenecks.
+  3. Generate and bind a multi-mip Hi-Z depth pyramid for conservative occlusion culling.
+  4. Implement SSBO atomic counters to safely track evaluated vs. drawn meshlets without driver performance stalls.
 
 ## Phase 3.5 (Visibility Buffer & Pipeline Optimization)
 - **Status**: **COMPLETED**
 - **Goal**: Transition the engine to a true Visibility Buffer architecture and plug rendering bottlenecks.
-- **Why**: Decouples geometry rasterization from heavy material evaluation. By outputting only a 64-bit payload per pixel, we achieve absolute zero overdraw for complex PBR materials—critical for rendering millions of sub-pixel triangles (a la Nanite).
+- **Why**: Decouples geometry rasterization from heavy material evaluation. By outputting only a 64-bit payload per pixel, material shading runs only on visible pixels, eliminating redundant fragment shading on occluded geometry.
 - **Tasks Completed**:
   1. Replaced hardware fragment shader barycentric extension requirement with analytical 2D screen-space barycentric reconstruction in compute, maximizing compatibility across NVIDIA, AMD, and Intel GPUs.
   2. Created `VK_FORMAT_R32G32_UINT` Visibility Buffer render target with proper layout transitions and barriers.
   3. Stripped `shader.mesh` to minimal vertex/primitive payload (`outMeshletIndex`, `perprimitiveEXT outPrimitiveID`), with `shader.frag` writing 64-bit IDs.
-  4. Built fullscreen `deferred.comp` pass: fetches 3 vertices from GPU SSBOs, calculates exact 2D screen-space barycentrics in NDC, performs perspective-correct attribute reconstruction, and samples base albedo with zero overdraw and zero validation errors.
+  4. Built fullscreen `deferred.comp` pass: fetches 3 vertices from GPU SSBOs, calculates exact 2D screen-space barycentrics in NDC, performs perspective-correct attribute reconstruction, and samples base albedo without redundant fragment shading and with full validation layer compliance.
   5. Built GPU Whole-Object Compute Pre-Culling: added `cull.comp` evaluating 6-plane frustum culling and conservative multi-mip Hi-Z occlusion culling on instance bounding boxes, populating `VkDrawMeshTasksIndirectCommandEXT` into indirect SSBOs and issuing GPU-driven `vkCmdDrawMeshTasksIndirectEXT`.
   6. **5-Level Discrete Mesh LODs & Texture Mipmaps**: 
      - Added offline Pos+UV topological pre-welding to eliminate normal-split vertex locks without touching UV seams.
-     - Strictly preserved UV chart boundaries with progressive `meshopt_simplify` across 5 discrete LOD levels (100%, 50%, 25%, 12.5%, 6.25%), eliminating contour-stripe distortion.
+     - Preserved UV chart boundaries with progressive `meshopt_simplify` across 5 discrete LOD levels (100%, 50%, 25%, 12.5%, 6.25%) to preserve silhouette contours and texture mapping.
      - Calculated exact 3D triangle edge length $L_{\text{tri}}$ and implemented screen-space triangle pixel projection math in `cull.comp` (stepping up LOD when triangles project $< 3.0\text{ px}$).
      - Implemented dynamic texel footprint calculation and hardware trilinear mipmapping in `deferred.comp` with active LOD clamping, F2 camera freeze, and manual F3 ImGui overrides.
 
 ## Phase 3.6 (Virtual File System & Release Packaging)
 - **Status**: **COMPLETED**
-- **Goal**: Implement a high-performance Virtual File System (VFS) and an automated production release pipeline.
-- **Why**: Eliminates loose shader and asset dependencies, packs game assets into an obfuscated, single-binary container (`engine.pak`) for distribution, and enables zero-dependency portable deployment on clean machines.
+- **Goal**: Implement a Virtual File System (VFS) and an automated production release pipeline.
+- **Why**: Eliminates loose shader and asset dependencies, packs game assets into an indexed, single-binary archive (`engine.pak`) for distribution, and enables zero-dependency portable deployment on clean machines.
 - **Tasks Completed**:
   1. Designed and built `vfs::initialize()`, `read_file()`, and `get_file_span()` utilizing memory-mapped files (`CreateFileMapping` / `MapViewOfFile`) on Windows with transparent fallback to loose disk files for dev mode.
   2. Implemented `tools/pak_compiler.cpp` to bundle SPIR-V shaders, GLB models, and KTX2/raw textures into contiguous `engine.pak` archives with 128-byte normalized path headers.
@@ -70,7 +70,7 @@ This plan outlines the next major architectural upgrades for the engine, focusin
 ## Phase 4 (Hardware Ray Tracing - RT Pipeline)
 - **Status**: **PENDING**
 - **Goal**: Add hardware-accelerated ray tracing via `VK_KHR_ray_tracing_pipeline`.
-- **Why**: Leverage the RTX 3090's RT cores for precise shadowing, ambient occlusion, and reflections.
+- **Why**: Leverage hardware RT cores for precise shadowing, ambient occlusion, and reflections.
 - **Tasks**:
   1. Build a Bottom-Level Acceleration Structure (BLAS) for every static mesh, and a Top-Level Acceleration Structure (TLAS) for scene instances.
   2. Implement Ray Generation, Closest Hit, and Miss shaders to trace scene intersections.
@@ -79,8 +79,8 @@ This plan outlines the next major architectural upgrades for the engine, focusin
 ## Phase 5 (Next-Gen Lighting - ReSTIR & Denoising)
 - **Status**: **PENDING**
 - **Goal**: Implement ReSTIR DI (Direct Illumination) and GI (Global Illumination), alongside an SVGF denoiser.
-- **Why**: Provides real-time path-traced lighting quality efficiently.
+- **Why**: Provides high-quality direct and indirect lighting sample convergence.
 - **Tasks**:
   1. Implement ReSTIR DI to efficiently sample many light sources.
-  2. Implement ReSTIR GI for infinite-bounce diffuse interreflection.
-  3. Implement an SVGF (Spatiotemporal Variance-Guided Filter) denoiser to clean up the stochastic RT noise.
+  2. Implement ReSTIR GI for multi-bounce diffuse indirect lighting.
+  3. Implement an SVGF (Spatiotemporal Variance-Guided Filter) denoiser to clean up stochastic RT noise.

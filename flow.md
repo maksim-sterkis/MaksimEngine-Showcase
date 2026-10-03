@@ -50,10 +50,10 @@ graph TD
         subgraph Phase C & D: Hi-Z & Deferred Resolve
             VisBuf --> DefComp[shaders/deferred.comp]
             Desc -.->|Bindless SSBOs & Mipmaps| DefComp
-            DefComp -->|Analytical Barycentric Reconstruction| ZeroOverdraw[Zero-Overdraw Shaded Frame]
+            DefComp -->|Analytical Barycentric Reconstruction| ShadedFrame[Shaded Frame: VisBuffer Deferred Resolve]
         end
 
-        ZeroOverdraw --> UI[imgui: Debug HUD & Controls]
+        ShadedFrame --> UI[imgui: Debug HUD & Controls]
         UI --> Present[engine.cpp: Submit & Present to Screen]
     end
 ```

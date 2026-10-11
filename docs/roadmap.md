@@ -118,8 +118,14 @@ This plan outlines the next major architectural upgrades for the engine, focusin
      - Reconstructed surface world-space coordinates and geometric normals from perspective-correct barycentrics.
      - Cast inline shadow rays via `rayQueryInitializeEXT` / `rayQueryProceedEXT` with normal-offset surface bias to prevent self-shadowing acne.
      - Modulated Cook-Torrance BRDF direct diffuse and specular terms by shadow occlusion while maintaining ambient baseline illumination.
-  5. **Interactive Controls & Runtime Diagnostics**:
+  5. **Multi-LOD RT Acceleration Structures & Dynamic TLAS Pointer Swapping**:
+     - Unpacked discrete index buffers for all 6 LOD levels directly from the multi-LOD meshlet stream in `model::load_glb`.
+     - Built discrete Bottom-Level Acceleration Structures (`lodBlas[0..5]`) for each discrete LOD at load time with zero vertex buffer duplication.
+     - Generalized `raytracing::build_blas` for explicit buffer pairs and extended `InstanceRT` with `VkDeviceAddress blasAddress`.
+     - Implemented dynamic per-frame TLAS pointer swapping in `cull_scene` based on real-time screen-space LOD evaluation (or manual overrides `0`–`6`), ensuring ray queries test against the exact geometric silhouette seen on screen with zero visual acne.
+  6. **Interactive Controls & Runtime Diagnostics**:
      - Hotkey `T` toggles hardware ray-traced shadows at runtime without conflicting with LOD selection hotkeys `0`–`6`.
+     - F3 HUD live-reports active RT BLAS level and triangle count alongside rasterized mesh LOD (`RT BLAS: L%u (%u tris)`).
      - Dynamic sun azimuth and elevation controls with real-time HUD and F4 performance telemetry status.
 
 ## Phase 5 (Next-Gen Lighting - ReSTIR & Denoising)

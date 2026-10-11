@@ -14,13 +14,18 @@ A Vulkan 1.3 experimental rendering engine written in C++20, implementing a mode
 - **Meshlet Pipeline**: Geometry is partitioned into meshlets (up to 64 vertices, 124 triangles) using `meshoptimizer` and rendered via Task and Mesh shaders (`VK_EXT_mesh_shader`).
 - **Two-Phase GPU Culling & Indirect Dispatch**:
   - *Instance Pre-Cull (`shaders/cull.comp`)*: Evaluates bounding box frustum culling and Hi-Z occlusion tests, selects the active LOD step based on projected screen-space triangle dimensions, and writes indirect draw commands (`VkDrawMeshTasksIndirectCommandEXT`).
-  - *Meshlet Culling (`shaders/shader.task`)*: Evaluates meshlet bounding spheres against the view frustum, cone backface orientation, and conservative Hi-Z occlusion before emitting surviving meshlets to the mesh shader.
+  - *Meshlet Culling (`shaders/shader.task`)*: Evaluates meshlet bounding spheres against the view frustum, cone backface orientation, and conservative Hi-Z occlusion. Features metric linear-depth testing (`mesh_linear_dist > hiz_linear_dist + 0.25m`), viewport perimeter guards, and bounded mip downsampling to completely prevent false positives on concave craters or screen edges.
+- **Interactive Culling Diagnostics & Hotkeys**:
+  - Hotkeys `7`, `8`, `9` toggle Frustum, Cone, and Hi-Z culling stages independently at runtime with live atomic counters displayed on the HUD.
+  - Hotkeys `0` (Auto) and `1`–`5` (Force LOD 0–4) provide instant runtime LOD inspection.
+  - Hotkey `F1` / `M` toggles debug meshlet cluster coloring; `F2` freezes the culling camera for free-flight inspection.
 - **5-Level Discrete Meshlet LODs**: Generates 5 progressive simplification steps (100%, 50%, 25%, 12.5%, 6.25%) with embedded 3D triangle edge length metadata to drive runtime screen-space pixel projection metrics.
 - **Bindless Descriptors**: Uses Vulkan descriptor indexing (`VK_EXT_descriptor_indexing`) with unbounded descriptor arrays for textures and SSBOs, indexing materials and resources directly via PushConstants without per-draw binding changes.
 - **Offline Asset Compiler**: Standalone tool (`tools/model_compiler.cpp`) using `fastgltf` and `tinyobjloader` to process `.gltf` and `.obj` assets into `.glb` files with embedded meshlet streams, LOD levels, and textures. Welds normal-split vertices sharing UV coordinates prior to simplification to preserve texture chart seams.
 - **Virtual File System (VFS)**: Packages SPIR-V shaders, models, and textures into a single archive (`engine.pak`) accessed via memory-mapping on Windows, with automatic disk fallback for loose files during development.
 - **PBR Shading**: Evaluates Cook-Torrance BRDF (Albedo, Normal, Metallic, Roughness) with material parameters fetched from a global SSBO.
-- **Hardware Texture Mipmapping**: Generates mipmaps via `vkCmdBlitImage`. Samples trilinear mip levels in deferred compute using screen-space texel footprint estimation clamped to the active mesh LOD level.
+- **Hardware Texture Mipmapping & Analytical Derivatives**: Closed-form screen-space barycentric derivatives (`dUVdx`, `dUVdy`) drive hardware `textureGrad` sampling for smooth, zero-pop anisotropic mipmap transitions.
+- **Non-Intrusive Telemetry HUD & Profiler**: Click-through passive F3 HUD and F4 performance telemetry dashboards with rolling history line plots for framerate, latency, and culling efficiency.
 - **Scalar Block Layout**: Uses `GL_EXT_scalar_block_layout` so C++ structs and shader storage buffers share matching memory layout without manual alignment padding.
 
 ## Roadmap & Upcoming Features

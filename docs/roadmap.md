@@ -67,6 +67,36 @@ This plan outlines the next major architectural upgrades for the engine, focusin
   4. Added GPU scoring in `src/device.cpp` to automatically prioritize discrete GPUs over integrated graphics on hybrid systems.
   5. Gated validation layers behind `NDEBUG` so packaged release builds run cleanly without requiring the Vulkan SDK or Khronos validation layer runtime.
 
+## Phase 3.7 (Robust Meshlets, Analytical VisBuffer Filtering & Ergonomics)
+- **Status**: **COMPLETED**
+- **Goal**: Eliminate LOD meshlet boundary tears, remove texture mip-popping with analytical screen-space derivatives, add persistent settings, and overhaul in-game diagnostic telemetry.
+- **Why**: Provides artifact-free geometry transitions across all 5 LODs, seamless anisotropic texture filtering without artificial mip-clamping, persistent player preferences, and non-intrusive HUD and profiler tools.
+- **Tasks Completed**:
+  1. **Seam-Free Meshlet Generation & Simplification**:
+     - Upgraded `tools/model_compiler.cpp` to utilize `meshopt_simplifyWithAttributes` preserving UV chart boundaries with attribute weighting and `meshopt_SimplifyLockBorder`.
+     - Integrated `meshopt_optimizeMeshlet` across all generated clusters to optimize vertex cache locality and eliminate internal indexing gaps.
+     - Added 5% conservative safety margins and loosened cone cutoff limits on simplified silhouettes to prevent boundary meshlets from false-positive culling.
+  2. **Analytical Screen-Space UV Derivatives & Zero-Popping Mipmaps**:
+     - Completely eliminated artificial discrete `max(mipLevel, float(activeLod))` clamping in `shaders/deferred.comp`.
+     - Derived closed-form analytical screen-space partial derivatives $\frac{\partial \text{UV}}{\partial x}$ and $\frac{\partial \text{UV}}{\partial y}$ from 2D barycentric gradients and perspective weights.
+     - Implemented hardware anisotropic and trilinear filtering via `textureGrad`, enabling smooth continuous mipmap transitions with zero popping between LOD transitions.
+     - Enabled 16x anisotropic filtering in Vulkan device features and samplers.
+  3. **Persistent Settings & ESC Pause Menu**:
+     - Created `src/core/settings.hpp` / `.cpp` with an INI parser/serializer persisting to `settings.ini`.
+     - Built modal ESC Pause Menu (Resume, Settings, Exit to Desktop) with cursor release.
+     - Added Settings menu managing Window Mode, VSync, Aspect Ratio Mode, Meshlet Debug Colors, Freeze Culling, Manual LOD Overrides, and Mouse Sensitivity.
+  4. **Non-Interactive F3 HUD & Hotkey LOD Switching**:
+     - Converted F3 into a click-through, non-blocking telemetry HUD overlay (`ImGuiWindowFlags_NoInputs`) displaying real-time FPS, 1% Lows, latency, active LOD, task/mesh invocations, and % culled.
+     - Bound number keys `0` (Auto) and `1`–`5` (LOD 0–4) for instant on-the-fly manual LOD switching without menus.
+  5. **F4 Performance Telemetry & Diagnostic Graphs**:
+     - Added F4 dashboard featuring rolling history `ImGui::PlotLines` graphs for FPS, frame time latency (ms), and meshlet culling efficiency.
+  6. **Robust Occlusion Culling, Edge Guards & Pipeline Diagnostics**:
+     - Converted Hi-Z occlusion testing in `shaders/shader.task` from non-linear NDC to real-world metric eye distance (`mesh_linear_dist > hiz_linear_dist + 0.25m`), preventing concave craters from falsely self-occluding against their rims.
+     - Implemented viewport perimeter guard (`min_x <= -0.98 || max_x >= 0.98 || min_y <= -0.98 || max_y >= 0.98`) and clamped downsampling mip level (Mip 5 / 32x32) to completely eliminate perimeter popping and coarse mip bleed.
+     - Added number hotkeys `7` (Frustum), `8` (Cone), and `9` (Hi-Z) to toggle culling stages in real-time, live-reflected on the F3 HUD alongside atomic culling breakdowns (`[F:%u C:%u H:%u]`).
+     - Guarded telemetry counters against `uint64_t` underflows during transient LOD switches, cleanly reporting `100.0%` culled when objects are off-screen.
+     - Refined mouse wheel camera speed adjustments to half-unit steps (`0.5`) clamped to `[0.5, 20.0]`.
+
 ## Phase 4 (Hardware Ray Tracing - RT Pipeline)
 - **Status**: **PENDING**
 - **Goal**: Add hardware-accelerated ray tracing via `VK_KHR_ray_tracing_pipeline`.

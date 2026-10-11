@@ -3,7 +3,7 @@
 This document explains **every single file** in the `VK_game_engine` project and how they interact to form a modern GPU-driven Vulkan engine.
 
 ## `demo/` (Interactive Tech Demo Entry Point)
-- **`demo/main.cpp`**: The primary executable entry point. Initializes the engine via `engine::init()`, loads assets (`asset_pool`), creates ECS entities (`MeshRenderer`, `Transform`), manages camera inputs, provides ImGui debug controls (freeze culling camera, manual LOD 0–4 overrides, meshlet debug coloring), updates frame logic, and drives the `draw_scene` rendering loop.
+- **`demo/main.cpp`**: The primary executable entry point. Initializes the engine via `engine::init()`, loads assets (`asset_pool`), creates ECS entities (`MeshRenderer`, `Transform`), manages camera inputs (with smooth `0.5` step speed scrolling in range `[0.5, 20.0]`), provides ImGui debug controls (freeze culling camera `F2`, manual LOD overrides via keys `0`–`6`, runtime culling stage toggles via keys `7`–`9`, meshlet debug coloring `F1`/`M`), updates frame logic, and drives the `draw_scene` rendering loop.
 
 ## `src/` (Core Engine Framework)
 
@@ -11,6 +11,7 @@ This document explains **every single file** in the `VK_game_engine` project and
 - **`src/core/window.hpp` / `.cpp`**: An abstraction over the GLFW library. Creates the OS window, handles fullscreen/borderless toggling, registers resize callbacks, and tracks the window surface.
 - **`src/core/input.hpp` / `.cpp`**: GLFW input system wrapper. Tracks keyboard key states (including F2 for freeze culling camera and F3 for debug UI) and mouse cursor movement, allowing `main.cpp` and `camera.cpp` to respond smoothly to user input.
 - **`src/core/vfs.hpp` / `.cpp`**: Virtual File System. Implements memory-mapped binary archive streaming (`engine.pak`) via Windows `CreateFileMapping` / `MapViewOfFile` with zero-copy binary slice access (`std::span`), accompanied by transparent fallback to loose disk files when running in developer mode.
+- **`src/core/settings.hpp` / `.cpp`**: Configuration and player preference persistence system. Implements INI serialization and deserialization (`settings.ini`), managing display mode, VSync, aspect ratio, meshlet debug colors, freeze culling, manual LOD overrides, and mouse sensitivity.
 - **`src/core/camera.hpp` / `.cpp`**: Manages the 3D camera. Uses the `input` system to move around (WASD/Mouse), extracts 6 frustum planes, and calculates the View and Projection matrices sent to GPU shaders via PushConstants.
 
 ### `src/renderer/` (Vulkan Setup & GPU Pipeline)
@@ -18,6 +19,7 @@ This document explains **every single file** in the `VK_game_engine` project and
   - `VK_EXT_descriptor_indexing` (Bindless textures and unbounded arrays)
   - `VK_EXT_mesh_shader` (Task and Mesh shaders)
   - `VK_EXT_scalar_block_layout` (Scalar block layout matching C++ structs to GPU buffers without manual alignment padding)
+  - `samplerAnisotropy` (16x anisotropic filtering across all texture samplers)
 - **`src/renderer/swapchain.hpp` / `.cpp`**: Manages the Vulkan Swapchain (the array of images presented to the screen). Handles querying surface capabilities, selecting present modes (Mailbox/Vsync), recreating the swapchain on resize, and allocating the **`VK_FORMAT_R32G32_UINT` Visibility Buffer** image alongside the Depth Buffer.
 - **`src/renderer/engine.hpp` / `.cpp`**: The central orchestrator for the engine framework. It bundles `Device`, `Window`, and `Swapchain`. Manages frame synchronization (Fences and Semaphores), per-frame staging buffers, GPU indirect buffers (`VkDrawMeshTasksIndirectCommandEXT`), GPU instance buffers (`InstanceDataSSBO`), Hi-Z depth pyramid downsampling, fullscreen compute dispatches (`cull.comp`, `deferred.comp`), and presentation.
 - **`src/renderer/pipeline.hpp` / `.cpp`**: Defines the Graphics and Compute Pipelines:
@@ -25,27 +27,27 @@ This document explains **every single file** in the `VK_game_engine` project and
   - **Cull Compute Pipeline**: Compiles `cull.comp` for object-level frustum, Hi-Z, and LOD selection.
   - **Deferred Resolve Compute Pipeline**: Compiles `deferred.comp` for fullscreen Visibility Buffer decoding and PBR evaluation.
   - Configures the **Bindless Global Descriptor Set Layout** (Binding 0: SSBO array, Binding 1: texture sampler array) and defines `PushConstantData`.
-- **`src/renderer/imgui.hpp` / `.cpp`**: Integration of Dear ImGui with Vulkan. Sets up the ImGui context, allocates dedicated descriptor pools, and handles rendering real-time performance stats (active LOD, meshlet counters, triangle counts, freeze toggles).
+- **`src/renderer/imgui.hpp` / `.cpp`**: Integration of Dear ImGui with Vulkan. Sets up the ImGui context, allocates dedicated descriptor pools, and handles rendering real-time performance stats (passive F3 HUD, F4 performance telemetry graphs, ESC pause menu, and persistent settings dialog).
 
 ### `src/scene/` (Scene, Assets & Resources)
 - **`src/scene/asset_pool.hpp` / `.cpp`**: Central asset registry holding loaded `ModelData` and `TextureData`. Compiles the global `MaterialSSBO` and registers texture samplers into the Global Descriptor Set array.
 - **`src/scene/model.hpp` / `.cpp`**: Uses `fastgltf` to parse binary `.glb` files streamed through the VFS. Parses multi-LOD meshlet headers ("MLOD"), stores up to 8 discrete LOD levels with individual meshlet counts, offsets, and average 3D triangle edge lengths $L_{\text{tri}}$, and allocates GPU SSBO buffers for vertices, meshlets, vertex indices, and triangle indices.
-- **`src/scene/texture.hpp` / `.cpp`**: Responsible for decoding images into VRAM. Decodes standard formats (PNG/JPG) using `stb_image`, generates complete trilinear mipmap chains down to $1\times 1$ via `vkCmdBlitImage`, and creates `VkSampler` objects with anisotropic filtering.
+- **`src/scene/texture.hpp` / `.cpp`**: Responsible for decoding images into VRAM. Decodes standard formats (PNG/JPG) using `stb_image`, generates complete trilinear mipmap chains down to $1\times 1$ via `vkCmdBlitImage`, and creates `VkSampler` objects with 16x anisotropic filtering.
 - **`src/scene/ecs.hpp` / `.cpp`**: A custom, lightweight Entity Component System (ECS). Uses `entt`-style sparse sets to manage `Entity` IDs and their attached components (`Transform`, `MeshRenderer`).
 
 ## `shaders/` (GPU Programs)
 - **`shaders/cull.comp`**: The Tier-1 GPU Compute Pre-Cull shader. Evaluates 6-plane frustum culling and conservative multi-mip Hi-Z occlusion tests on instance bounding boxes. Calculates screen-space projected triangle pixel dimensions to select the optimal discrete LOD (LOD 0 to 4), writes `VkDrawMeshTasksIndirectCommandEXT` directly into an indirect SSBO, and populates draw counts.
-- **`shaders/shader.task`**: The Tier-2 Vulkan Task Shader. Evaluates sub-mesh meshlet bounding spheres against the camera frustum, tests for cone backface culling, and performs Hi-Z occlusion culling per meshlet. Dispatches surviving meshlets to `shader.mesh` and updates atomic debug stats.
+- **`shaders/shader.task`**: The Tier-2 Vulkan Task Shader. Evaluates sub-mesh meshlet bounding spheres against the camera frustum (toggleable via key `7`), tests for cone backface culling (toggleable via key `8`), and performs robust Hi-Z occlusion culling (toggleable via key `9`) using linear metric eye-distance testing (`mesh_linear_dist > hiz_linear_dist + 0.25m`), viewport perimeter guards, and bounded mip downsampling. Dispatches surviving meshlets to `shader.mesh` and updates atomic debug stats.
 - **`shaders/shader.mesh`**: The Vulkan Mesh Shader. Reads packed meshlet vertex and triangle indices from GPU SSBOs, emits minimal vertex positions (`gl_Position`), and outputs `outMeshletIndex` and per-primitive IDs (`gl_PrimitiveID`) directly to the rasterizer.
 - **`shaders/shader.frag`**: The Visibility Buffer fragment shader. Writes the 64-bit compact ID payload `uvec2((instanceId << 20) | inMeshletIndex, inPrimitiveID)` directly into the `R32G32_UINT` Visibility Buffer.
-- **`shaders/deferred.comp`**: The Fullscreen Visibility Buffer Resolve Compute Shader. Decodes pixel IDs from `inVisibility`, loads the 3 triangle vertices from Bindless SSBOs, analytically reconstructs 2D screen-space barycentric coordinates in NDC, calculates perspective-correct attribute weights, evaluates texel footprint, and samples Bindless PBR textures with hardware trilinear mipmapping without redundant fragment shading on occluded surfaces.
+- **`shaders/deferred.comp`**: The Fullscreen Visibility Buffer Resolve Compute Shader. Decodes pixel IDs from `inVisibility`, loads the 3 triangle vertices from Bindless SSBOs, analytically reconstructs 2D screen-space barycentric coordinates in NDC, evaluates closed-form analytical screen-space UV derivatives ($\text{dUVdx}, \text{dUVdy}$), and samples Bindless PBR textures using hardware `textureGrad` (anisotropic + trilinear) without artificial LOD clamping or texture popping.
 
 ## `tools/` (Offline Asset Pipeline & Packaging)
 - **`tools/model_compiler.cpp`**: Standalone offline asset pipeline. Reads raw `.gltf` and `.obj` files:
   1. Deduplicates normal-split duplicate vertices using `meshopt_generateVertexRemapMulti` on `(Position, UV)` while strictly preserving genuine UV chart boundaries.
-  2. Generates 5 discrete progressive LOD levels (100%, 50%, 25%, 12.5%, 6.25%) using `meshopt_simplify` with locked UV seams to preserve texture chart boundaries and silhouette contours.
-  3. Calculates exact 3D triangle edge length metadata $L_{\text{tri}}$ for each LOD.
-  4. Partitions each LOD into optimized Meshlets (max 64 vertices, 124 triangles) using `meshopt_buildMeshlets`.
+  2. Generates 5 discrete progressive LOD levels (100%, 50%, 25%, 12.5%, 6.25%) using `meshopt_simplifyWithAttributes` with UV streams and `meshopt_SimplifyLockBorder` to preserve seamless chart boundaries and silhouette contours.
+  3. Optimizes meshlet clusters using `meshopt_optimizeMeshlet` to maximize vertex cache locality.
+  4. Calculates conservative bounding spheres and cone cutoffs with safety margins to avoid false-positive culling on simplified silhouettes.
   5. Remaps vertex indices back to original vertex buffers via `remapToOriginal`.
   6. Packages the geometry, embedded textures, and multi-LOD meshlet streams into a single, dense `.glb` binary payload.
 - **`tools/texture_compiler.cpp`**: Helper tool used for batch conversions of raw texture directories into `KTX2` format.

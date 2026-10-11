@@ -13,7 +13,7 @@ graph TD
     %% Step 2 & 3
     subgraph Step 2 & 3: Asset Load & Bindless Sync
         Main1 -->|Requests Model| Pool[asset_pool]
-        Pool -->|model::load_glb| Mod[model.cpp: 5-Level Meshlet LODs]
+        Pool -->|model::load_glb| Mod[model.cpp: 6-Level Meshlet LODs]
         Mod -->|Embedded Textures| Tex[texture.cpp: Generate Mipmaps]
         Tex -->|Uploads to GPU| VRAM[(GPU VRAM: SSBOs & Textures)]
         
@@ -34,7 +34,7 @@ graph TD
             Instances --> CullComp[shaders/cull.comp]
             Cam --> CullComp
             CullComp -->|Frustum & Hi-Z Test| CullDecide{Visible?}
-            CullDecide -->|Yes: Triangle Pixel Math| PickLOD[Select LOD 0-4]
+            CullDecide -->|Yes: Triangle Pixel Math| PickLOD[Select LOD 0-5]
             PickLOD -->|Populate Draw Command| IndBuffer[(Indirect Draw SSBO)]
         end
 

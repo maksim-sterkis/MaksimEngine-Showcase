@@ -50,9 +50,9 @@ This plan outlines the next major architectural upgrades for the engine, focusin
   3. Stripped `shader.mesh` to minimal vertex/primitive payload (`outMeshletIndex`, `perprimitiveEXT outPrimitiveID`), with `shader.frag` writing 64-bit IDs.
   4. Built fullscreen `deferred.comp` pass: fetches 3 vertices from GPU SSBOs, calculates exact 2D screen-space barycentrics in NDC, performs perspective-correct attribute reconstruction, and samples base albedo without redundant fragment shading and with full validation layer compliance.
   5. Built GPU Whole-Object Compute Pre-Culling: added `cull.comp` evaluating 6-plane frustum culling and conservative multi-mip Hi-Z occlusion culling on instance bounding boxes, populating `VkDrawMeshTasksIndirectCommandEXT` into indirect SSBOs and issuing GPU-driven `vkCmdDrawMeshTasksIndirectEXT`.
-  6. **5-Level Discrete Mesh LODs & Texture Mipmaps**: 
+  6. **6-Level Discrete Mesh LODs & Texture Mipmaps**: 
      - Added offline Pos+UV topological pre-welding to eliminate normal-split vertex locks without touching UV seams.
-     - Preserved UV chart boundaries with progressive `meshopt_simplify` across 5 discrete LOD levels (100%, 50%, 25%, 12.5%, 6.25%) to preserve silhouette contours and texture mapping.
+     - Preserved UV chart boundaries with progressive `meshopt_simplify` across 6 discrete LOD levels (100%, 50%, 25%, 12.5%, 6.25%, 3.125%) to preserve silhouette contours and texture mapping.
      - Calculated exact 3D triangle edge length $L_{\text{tri}}$ and implemented screen-space triangle pixel projection math in `cull.comp` (stepping up LOD when triangles project $< 3.0\text{ px}$).
      - Implemented dynamic texel footprint calculation and hardware trilinear mipmapping in `deferred.comp` with active LOD clamping, F2 camera freeze, and manual F3 ImGui overrides.
 
@@ -70,7 +70,7 @@ This plan outlines the next major architectural upgrades for the engine, focusin
 ## Phase 3.7 (Robust Meshlets, Analytical VisBuffer Filtering & Ergonomics)
 - **Status**: **COMPLETED**
 - **Goal**: Eliminate LOD meshlet boundary tears, remove texture mip-popping with analytical screen-space derivatives, add persistent settings, and overhaul in-game diagnostic telemetry.
-- **Why**: Provides artifact-free geometry transitions across all 5 LODs, seamless anisotropic texture filtering without artificial mip-clamping, persistent player preferences, and non-intrusive HUD and profiler tools.
+- **Why**: Provides artifact-free geometry transitions across all 6 LODs, seamless anisotropic texture filtering without artificial mip-clamping, persistent player preferences, and non-intrusive HUD and profiler tools.
 - **Tasks Completed**:
   1. **Seam-Free Meshlet Generation & Simplification**:
      - Upgraded `tools/model_compiler.cpp` to utilize `meshopt_simplifyWithAttributes` preserving UV chart boundaries with attribute weighting and `meshopt_SimplifyLockBorder`.

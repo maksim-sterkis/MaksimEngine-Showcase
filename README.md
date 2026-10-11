@@ -4,7 +4,7 @@
 [![Platform](https://img.shields.io/badge/Platform-Windows%20x64-0078D6?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/maksim-sterkis/MaksimEngine-Showcase/releases)
 [![C++20](https://img.shields.io/badge/C%2B%2B-20-00599C?style=for-the-badge&logo=c%2B%2B&logoColor=white)](https://en.cppreference.com/w/cpp/20)
 [![Pipeline](https://img.shields.io/badge/Pipeline-Mesh%20Shaders%20%2B%20VisBuffer-orange?style=for-the-badge)](docs/file.md)
-[![Release](https://img.shields.io/badge/Release-v0.1.0-8A2BE2?style=for-the-badge&logo=github)](https://github.com/maksim-sterkis/MaksimEngine-Showcase/releases)
+[![Release](https://img.shields.io/badge/Release-v0.1.1-8A2BE2?style=for-the-badge&logo=github)](https://github.com/maksim-sterkis/MaksimEngine-Showcase/releases)
 
 A Vulkan 1.3 experimental rendering engine written in C++20, implementing a modern GPU-driven pipeline with mesh shaders, visibility buffer shading, discrete meshlet LODs, and hierarchical-Z occlusion culling.
 
@@ -14,12 +14,12 @@ A Vulkan 1.3 experimental rendering engine written in C++20, implementing a mode
 - **Meshlet Pipeline**: Geometry is partitioned into meshlets (up to 64 vertices, 124 triangles) using `meshoptimizer` and rendered via Task and Mesh shaders (`VK_EXT_mesh_shader`).
 - **Two-Phase GPU Culling & Indirect Dispatch**:
   - *Instance Pre-Cull (`shaders/cull.comp`)*: Evaluates bounding box frustum culling and Hi-Z occlusion tests, selects the active LOD step based on projected screen-space triangle dimensions, and writes indirect draw commands (`VkDrawMeshTasksIndirectCommandEXT`).
-  - *Meshlet Culling (`shaders/shader.task`)*: Evaluates meshlet bounding spheres against the view frustum, cone backface orientation, and conservative Hi-Z occlusion. Features metric linear-depth testing (`mesh_linear_dist > hiz_linear_dist + 0.25m`), viewport perimeter guards, and bounded mip downsampling to completely prevent false positives on concave craters or screen edges.
+  - *Meshlet Culling (`shaders/shader.task`)*: Evaluates meshlet bounding spheres against the view frustum, cone backface orientation, and conservative Hi-Z occlusion. Features metric linear-depth testing (`mesh_linear_dist > hiz_linear_dist + 0.25m`), viewport perimeter guards, and bounded mip downsampling to reliably prevent false-positive culling on concave craters and screen edges.
 - **Interactive Culling Diagnostics & Hotkeys**:
   - Hotkeys `7`, `8`, `9` toggle Frustum, Cone, and Hi-Z culling stages independently at runtime with live atomic counters displayed on the HUD.
-  - Hotkeys `0` (Auto) and `1`–`5` (Force LOD 0–4) provide instant runtime LOD inspection.
+  - Hotkeys `0` (Auto) and `1`–`6` (Force LOD 0–5) provide instant runtime LOD inspection.
   - Hotkey `F1` / `M` toggles debug meshlet cluster coloring; `F2` freezes the culling camera for free-flight inspection.
-- **5-Level Discrete Meshlet LODs**: Generates 5 progressive simplification steps (100%, 50%, 25%, 12.5%, 6.25%) with embedded 3D triangle edge length metadata to drive runtime screen-space pixel projection metrics.
+- **6-Level Discrete Meshlet LODs**: Generates 6 progressive simplification steps (100%, 50%, 25%, 12.5%, 6.25%, 3.125%) with embedded 3D triangle edge length metadata to drive runtime screen-space pixel projection metrics.
 - **Bindless Descriptors**: Uses Vulkan descriptor indexing (`VK_EXT_descriptor_indexing`) with unbounded descriptor arrays for textures and SSBOs, indexing materials and resources directly via PushConstants without per-draw binding changes.
 - **Offline Asset Compiler**: Standalone tool (`tools/model_compiler.cpp`) using `fastgltf` and `tinyobjloader` to process `.gltf` and `.obj` assets into `.glb` files with embedded meshlet streams, LOD levels, and textures. Welds normal-split vertices sharing UV coordinates prior to simplification to preserve texture chart seams.
 - **Virtual File System (VFS)**: Packages SPIR-V shaders, models, and textures into a single archive (`engine.pak`) accessed via memory-mapping on Windows, with automatic disk fallback for loose files during development.

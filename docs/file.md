@@ -36,8 +36,8 @@ This document explains **every single file** in the `VK_game_engine` project and
 - **`src/scene/ecs.hpp` / `.cpp`**: A custom, lightweight Entity Component System (ECS). Uses `entt`-style sparse sets to manage `Entity` IDs and their attached components (`Transform`, `MeshRenderer`).
 
 ## `shaders/` (GPU Programs)
-- **`shaders/cull.comp`**: The Tier-1 GPU Compute Pre-Cull shader. Evaluates 6-plane frustum culling and conservative multi-mip Hi-Z occlusion tests on instance bounding boxes. Calculates screen-space projected triangle pixel dimensions to select the optimal discrete LOD (LOD 0 to 4), writes `VkDrawMeshTasksIndirectCommandEXT` directly into an indirect SSBO, and populates draw counts.
-- **`shaders/shader.task`**: The Tier-2 Vulkan Task Shader. Evaluates sub-mesh meshlet bounding spheres against the camera frustum (toggleable via key `7`), tests for cone backface culling (toggleable via key `8`), and performs robust Hi-Z occlusion culling (toggleable via key `9`) using linear metric eye-distance testing (`mesh_linear_dist > hiz_linear_dist + 0.25m`), viewport perimeter guards, and bounded mip downsampling. Dispatches surviving meshlets to `shader.mesh` and updates atomic debug stats.
+- **`shaders/cull.comp`**: The Tier-1 GPU Compute Pre-Cull shader. Evaluates 6-plane frustum culling and conservative multi-mip Hi-Z occlusion tests on instance bounding boxes. Calculates screen-space projected triangle pixel dimensions to select the optimal discrete LOD (LOD 0 to 5), writes `VkDrawMeshTasksIndirectCommandEXT` directly into an indirect SSBO, and populates draw counts.
+- **`shaders/shader.task`**: The Tier-2 Vulkan Task Shader. Evaluates sub-mesh meshlet bounding spheres against the camera frustum (toggleable via key `7`), tests for cone backface culling (toggleable via key `8`), and performs robust Hi-Z occlusion culling (toggleable via key `9`) using linear metric eye-distance testing (`mesh_linear_dist > hiz_linear_dist + 0.25m`), viewport perimeter guards, and bounded mip downsampling to mitigate false-positive culling on concave craters or screen edges. Dispatches surviving meshlets to `shader.mesh` and updates atomic debug stats.
 - **`shaders/shader.mesh`**: The Vulkan Mesh Shader. Reads packed meshlet vertex and triangle indices from GPU SSBOs, emits minimal vertex positions (`gl_Position`), and outputs `outMeshletIndex` and per-primitive IDs (`gl_PrimitiveID`) directly to the rasterizer.
 - **`shaders/shader.frag`**: The Visibility Buffer fragment shader. Writes the 64-bit compact ID payload `uvec2((instanceId << 20) | inMeshletIndex, inPrimitiveID)` directly into the `R32G32_UINT` Visibility Buffer.
 - **`shaders/deferred.comp`**: The Fullscreen Visibility Buffer Resolve Compute Shader. Decodes pixel IDs from `inVisibility`, loads the 3 triangle vertices from Bindless SSBOs, analytically reconstructs 2D screen-space barycentric coordinates in NDC, evaluates closed-form analytical screen-space UV derivatives ($\text{dUVdx}, \text{dUVdy}$), and samples Bindless PBR textures using hardware `textureGrad` (anisotropic + trilinear) without artificial LOD clamping or texture popping.
@@ -45,7 +45,7 @@ This document explains **every single file** in the `VK_game_engine` project and
 ## `tools/` (Offline Asset Pipeline & Packaging)
 - **`tools/model_compiler.cpp`**: Standalone offline asset pipeline. Reads raw `.gltf` and `.obj` files:
   1. Deduplicates normal-split duplicate vertices using `meshopt_generateVertexRemapMulti` on `(Position, UV)` while strictly preserving genuine UV chart boundaries.
-  2. Generates 5 discrete progressive LOD levels (100%, 50%, 25%, 12.5%, 6.25%) using `meshopt_simplifyWithAttributes` with UV streams and `meshopt_SimplifyLockBorder` to preserve seamless chart boundaries and silhouette contours.
+  2. Generates 6 discrete progressive LOD levels (100%, 50%, 25%, 12.5%, 6.25%, 3.125%) using `meshopt_simplifyWithAttributes` with UV streams and `meshopt_SimplifyLockBorder` to preserve seamless chart boundaries and silhouette contours.
   3. Optimizes meshlet clusters using `meshopt_optimizeMeshlet` to maximize vertex cache locality.
   4. Calculates conservative bounding spheres and cone cutoffs with safety margins to avoid false-positive culling on simplified silhouettes.
   5. Remaps vertex indices back to original vertex buffers via `remapToOriginal`.
@@ -65,7 +65,7 @@ This document explains **every single file** in the `VK_game_engine` project and
 5. **Rendering Pass**:
    - **Phase A (Tier-1 Compute Pre-Cull)**:
      - `engine.cpp` uploads instance bounding boxes and transforms into `instanceBuffers`.
-     - `cull.comp` runs: tests instance AABBs against frustum planes and previous-frame Hi-Z depth pyramid, computes projected triangle pixel size to select LOD level (0–4), and writes `VkDrawMeshTasksIndirectCommandEXT` directly into `indirectBuffers`.
+     - `cull.comp` runs: tests instance AABBs against frustum planes and previous-frame Hi-Z depth pyramid, computes projected triangle pixel size to select LOD level (0–5), and writes `VkDrawMeshTasksIndirectCommandEXT` directly into `indirectBuffers`.
      - A pipeline barrier synchronizes compute writes to indirect draw reads (`VK_ACCESS_INDIRECT_COMMAND_READ_BIT`).
    - **Phase B (Visibility Geometry Pass)**:
      - `engine.cpp` begins the Visibility renderpass targeting the `R32G32_UINT` Visibility Buffer and Depth Buffer.

@@ -30,7 +30,7 @@ A Vulkan 1.3 experimental rendering engine written in C++20, implementing a mode
 
 ## Roadmap & Upcoming Features
 
-1. **Hardware Ray Tracing**: Ray-traced shadows, ambient occlusion, and reflections using `VK_KHR_ray_tracing_pipeline` with BLAS/TLAS structures built from mesh geometry.
+1. **Hardware Ray-Traced Shadows**: High-performance directional shadows executed on physical RT cores via `VK_KHR_acceleration_structure` and `VK_KHR_ray_query`. Leverages the Visibility Buffer to completely bypass primary ray traversal, firing coherent shadow rays directly from visible surfaces in deferred compute.
 2. **ReSTIR DI / GI**: Reservoir-based spatiotemporal importance resampling for direct and indirect lighting.
 3. **Temporal Denoising (SVGF)**: Spatiotemporal variance-guided filtering to filter stochastic ray-traced lighting passes.
 

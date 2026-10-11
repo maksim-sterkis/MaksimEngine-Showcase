@@ -87,7 +87,7 @@ This plan outlines the next major architectural upgrades for the engine, focusin
      - Added Settings menu managing Window Mode, VSync, Aspect Ratio Mode, Meshlet Debug Colors, Freeze Culling, Manual LOD Overrides, and Mouse Sensitivity.
   4. **Non-Interactive F3 HUD & Hotkey LOD Switching**:
      - Converted F3 into a click-through, non-blocking telemetry HUD overlay (`ImGuiWindowFlags_NoInputs`) displaying real-time FPS, 1% Lows, latency, active LOD, task/mesh invocations, and % culled.
-     - Bound number keys `0` (Auto) and `1`–`5` (LOD 0–4) for instant on-the-fly manual LOD switching without menus.
+     - Bound number keys `0` (Auto) and `1`–`6` (LOD 0–5) for instant on-the-fly manual LOD switching without menus.
   5. **F4 Performance Telemetry & Diagnostic Graphs**:
      - Added F4 dashboard featuring rolling history `ImGui::PlotLines` graphs for FPS, frame time latency (ms), and meshlet culling efficiency.
   6. **Robust Occlusion Culling, Edge Guards & Pipeline Diagnostics**:
@@ -97,14 +97,22 @@ This plan outlines the next major architectural upgrades for the engine, focusin
      - Guarded telemetry counters against `uint64_t` underflows during transient LOD switches, cleanly reporting `100.0%` culled when objects are off-screen.
      - Refined mouse wheel camera speed adjustments to half-unit steps (`0.5`) clamped to `[0.5, 20.0]`.
 
-## Phase 4 (Hardware Ray Tracing - RT Pipeline)
+## Phase 4 (Hardware Ray-Traced Shadows - Ray Queries & Acceleration Structures)
 - **Status**: **PENDING**
-- **Goal**: Add hardware-accelerated ray tracing via `VK_KHR_ray_tracing_pipeline`.
-- **Why**: Leverage hardware RT cores for precise shadowing, ambient occlusion, and reflections.
+- **Goal**: Implement hardware-accelerated ray-traced shadows using `VK_KHR_acceleration_structure` and `VK_KHR_ray_query` integrated directly into the Visibility Buffer deferred compute pipeline.
+- **Why**: Replaces traditional cascaded shadow maps with exact hardware ray-traced directional shadows executed on physical GPU RT cores. Leverages the Visibility Buffer to completely skip primary camera ray traversal, casting coherent shadow rays solely from visible surface pixels in deferred compute with zero BVH divergence.
 - **Tasks**:
-  1. Build a Bottom-Level Acceleration Structure (BLAS) for every static mesh, and a Top-Level Acceleration Structure (TLAS) for scene instances.
-  2. Implement Ray Generation, Closest Hit, and Miss shaders to trace scene intersections.
-  3. Write an RT pass to evaluate direct shadowing using ray queries against the TLAS.
+  1. **Device & Memory Prerequisites**:
+     - Enable `VK_KHR_acceleration_structure`, `VK_KHR_ray_query`, `VK_KHR_deferred_host_operations`, and `VkPhysicalDeviceBufferDeviceAddressFeatures::bufferDeviceAddress`.
+     - Update vertex and index allocation flags with `VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR` and `VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT`.
+  2. **Acceleration Structure Pipeline (BLAS & TLAS)**:
+     - Build compact Bottom-Level Acceleration Structures (BLAS) for static meshes using LOD 0 vertex positions and index buffers, querying build buffer sizes via `vkGetAccelerationStructureBuildSizesKHR`.
+     - Build dynamic Top-Level Acceleration Structures (TLAS) from active ECS instance transforms (`VkAccelerationStructureInstanceKHR`) with per-frame CPU/GPU updates.
+     - Bind the scene TLAS descriptor into the Global Bindless Descriptor Set (`VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR`).
+  3. **Inline Ray-Traced Shadows (`shaders/deferred.comp`)**:
+     - Enable `GL_EXT_ray_query` in the Visibility Buffer resolve compute pass.
+     - Reconstruct surface world-space coordinates and geometric normals to launch inline shadow rays (`rayQueryInitializeEXT`, `rayQueryProceedEXT`) towards directional and point light sources.
+     - Apply normal-offset surface bias to prevent self-shadowing acne and incorporate shadow occlusion terms directly into the Cook-Torrance BRDF direct lighting evaluation.
 
 ## Phase 5 (Next-Gen Lighting - ReSTIR & Denoising)
 - **Status**: **PENDING**

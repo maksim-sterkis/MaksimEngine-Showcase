@@ -15,7 +15,9 @@ A Vulkan 1.3 experimental rendering engine written in C++20, implementing a mode
 - **Two-Phase GPU Culling & Indirect Dispatch**:
   - *Instance Pre-Cull (`shaders/cull.comp`)*: Evaluates bounding box frustum culling and Hi-Z occlusion tests, selects the active LOD step based on projected screen-space triangle dimensions, and writes indirect draw commands (`VkDrawMeshTasksIndirectCommandEXT`).
   - *Meshlet Culling (`shaders/shader.task`)*: Evaluates meshlet bounding spheres against the view frustum, cone backface orientation, and conservative Hi-Z occlusion. Features metric linear-depth testing (`mesh_linear_dist > hiz_linear_dist + 0.25m`), viewport perimeter guards, and bounded mip downsampling to reliably prevent false-positive culling on concave craters and screen edges.
-- **Interactive Culling Diagnostics & Hotkeys**:
+- **Hardware Ray-Traced Shadows**: Exact directional shadows powered by physical GPU RT cores via `VK_KHR_acceleration_structure` and `VK_KHR_ray_query`. Integrates inline ray queries directly into the Visibility Buffer deferred resolve pass (`shaders/deferred.comp`), completely bypassing primary ray traversal and firing coherent shadow rays exclusively from visible surface pixels with normal-offset bias.
+- **Interactive Controls & Hotkeys**:
+  - Hotkey `T` toggles hardware ray-traced shadows on and off at runtime.
   - Hotkeys `7`, `8`, `9` toggle Frustum, Cone, and Hi-Z culling stages independently at runtime with live atomic counters displayed on the HUD.
   - Hotkeys `0` (Auto) and `1`–`6` (Force LOD 0–5) provide instant runtime LOD inspection.
   - Hotkey `F1` / `M` toggles debug meshlet cluster coloring; `F2` freezes the culling camera for free-flight inspection.
@@ -30,9 +32,8 @@ A Vulkan 1.3 experimental rendering engine written in C++20, implementing a mode
 
 ## Roadmap & Upcoming Features
 
-1. **Hardware Ray-Traced Shadows**: High-performance directional shadows executed on physical RT cores via `VK_KHR_acceleration_structure` and `VK_KHR_ray_query`. Leverages the Visibility Buffer to completely bypass primary ray traversal, firing coherent shadow rays directly from visible surfaces in deferred compute.
-2. **ReSTIR DI / GI**: Reservoir-based spatiotemporal importance resampling for direct and indirect lighting.
-3. **Temporal Denoising (SVGF)**: Spatiotemporal variance-guided filtering to filter stochastic ray-traced lighting passes.
+1. **ReSTIR DI / GI**: Reservoir-based spatiotemporal importance resampling for direct and indirect lighting.
+2. **Temporal Denoising (SVGF)**: Spatiotemporal variance-guided filtering to filter stochastic ray-traced lighting passes.
 
 Check out the [full roadmap](docs/roadmap.md) for detailed progress and upcoming milestones.
 

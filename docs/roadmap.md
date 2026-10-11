@@ -98,21 +98,29 @@ This plan outlines the next major architectural upgrades for the engine, focusin
      - Refined mouse wheel camera speed adjustments to half-unit steps (`0.5`) clamped to `[0.5, 20.0]`.
 
 ## Phase 4 (Hardware Ray-Traced Shadows - Ray Queries & Acceleration Structures)
-- **Status**: **PENDING**
+- **Status**: **COMPLETED**
 - **Goal**: Implement hardware-accelerated ray-traced shadows using `VK_KHR_acceleration_structure` and `VK_KHR_ray_query` integrated directly into the Visibility Buffer deferred compute pipeline.
 - **Why**: Replaces traditional cascaded shadow maps with exact hardware ray-traced directional shadows executed on physical GPU RT cores. Leverages the Visibility Buffer to completely skip primary camera ray traversal, casting coherent shadow rays solely from visible surface pixels in deferred compute with zero BVH divergence.
-- **Tasks**:
-  1. **Device & Memory Prerequisites**:
-     - Enable `VK_KHR_acceleration_structure`, `VK_KHR_ray_query`, `VK_KHR_deferred_host_operations`, and `VkPhysicalDeviceBufferDeviceAddressFeatures::bufferDeviceAddress`.
-     - Update vertex and index allocation flags with `VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR` and `VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT`.
-  2. **Acceleration Structure Pipeline (BLAS & TLAS)**:
-     - Build compact Bottom-Level Acceleration Structures (BLAS) for static meshes using LOD 0 vertex positions and index buffers, querying build buffer sizes via `vkGetAccelerationStructureBuildSizesKHR`.
-     - Build dynamic Top-Level Acceleration Structures (TLAS) from active ECS instance transforms (`VkAccelerationStructureInstanceKHR`) with per-frame CPU/GPU updates.
-     - Bind the scene TLAS descriptor into the Global Bindless Descriptor Set (`VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR`).
-  3. **Inline Ray-Traced Shadows (`shaders/deferred.comp`)**:
-     - Enable `GL_EXT_ray_query` in the Visibility Buffer resolve compute pass.
-     - Reconstruct surface world-space coordinates and geometric normals to launch inline shadow rays (`rayQueryInitializeEXT`, `rayQueryProceedEXT`) towards directional and point light sources.
-     - Apply normal-offset surface bias to prevent self-shadowing acne and incorporate shadow occlusion terms directly into the Cook-Torrance BRDF direct lighting evaluation.
+- **Tasks Completed**:
+  1. **Device & Memory Extensions**:
+     - Enabled `VK_KHR_acceleration_structure`, `VK_KHR_ray_query`, `VK_KHR_deferred_host_operations`, and `bufferDeviceAddress = VK_TRUE`.
+     - Added `VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT` to buffer allocation in `device::create_buffer` and added `device::get_buffer_device_address`.
+     - Appended `VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT` to vertex and index buffer allocations in `model::create`.
+  2. **Acceleration Structure Infrastructure (`src/renderer/raytracing.hpp` / `.cpp`)**:
+     - Built compact Bottom-Level Acceleration Structures (BLAS) for static meshes using LOD 0 vertex positions and indices at asset load time.
+     - Implemented dynamic Top-Level Acceleration Structures (TLAS) with persistent host-visible coherent instance buffers, converting ECS entity transforms into 3x4 row-major affine matrices.
+     - Synchronized TLAS builds on the main frame command buffer with compute-read pipeline barriers prior to deferred compute resolve.
+  3. **Global Descriptor Set Binding**:
+     - Added Binding 2 (`VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR`) to `globalSetLayout` with `descriptorBindingAccelerationStructureUpdateAfterBind` support.
+     - Bound the active scene TLAS handle to the global descriptor set via `write_tlas_descriptor`.
+  4. **Inline Ray Query Shading (`shaders/deferred.comp`)**:
+     - Enabled `#extension GL_EXT_ray_query : require` and bound `topLevelAS`.
+     - Reconstructed surface world-space coordinates and geometric normals from perspective-correct barycentrics.
+     - Cast inline shadow rays via `rayQueryInitializeEXT` / `rayQueryProceedEXT` with normal-offset surface bias to prevent self-shadowing acne.
+     - Modulated Cook-Torrance BRDF direct diffuse and specular terms by shadow occlusion while maintaining ambient baseline illumination.
+  5. **Interactive Controls & Runtime Diagnostics**:
+     - Hotkey `T` toggles hardware ray-traced shadows at runtime without conflicting with LOD selection hotkeys `0`–`6`.
+     - Dynamic sun azimuth and elevation controls with real-time HUD and F4 performance telemetry status.
 
 ## Phase 5 (Next-Gen Lighting - ReSTIR & Denoising)
 - **Status**: **PENDING**

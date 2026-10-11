@@ -25,8 +25,9 @@ This document explains **every single file** in the `VK_game_engine` project and
 - **`src/renderer/pipeline.hpp` / `.cpp`**: Defines the Graphics and Compute Pipelines:
   - **Visibility Graphics Pipeline**: Compiles `shader.task`, `shader.mesh`, and `shader.frag`, rendering directly to the 64-bit Visibility Buffer.
   - **Cull Compute Pipeline**: Compiles `cull.comp` for object-level frustum, Hi-Z, and LOD selection.
-  - **Deferred Resolve Compute Pipeline**: Compiles `deferred.comp` for fullscreen Visibility Buffer decoding and PBR evaluation.
-  - Configures the **Bindless Global Descriptor Set Layout** (Binding 0: SSBO array, Binding 1: texture sampler array) and defines `PushConstantData`.
+  - **Deferred Resolve Compute Pipeline**: Compiles `deferred.comp` for fullscreen Visibility Buffer decoding, inline ray query hardware ray tracing, and PBR evaluation.
+  - Configures the **Bindless Global Descriptor Set Layout** (Binding 0: SSBO array, Binding 1: texture sampler array, Binding 2: Top-Level Acceleration Structure) and defines `PushConstantData`.
+- **`src/renderer/raytracing.hpp` / `.cpp`**: Hardware ray tracing acceleration structures wrapper. Manages Bottom-Level Acceleration Structures (BLAS) for static meshes built with `VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR` and dynamic Top-Level Acceleration Structures (TLAS) built each frame from ECS instance transforms with host-visible coherent instance buffers, synchronizing builds via Vulkan memory barriers.
 - **`src/renderer/imgui.hpp` / `.cpp`**: Integration of Dear ImGui with Vulkan. Sets up the ImGui context, allocates dedicated descriptor pools, and handles rendering real-time performance stats (passive F3 HUD, F4 performance telemetry graphs, ESC pause menu, and persistent settings dialog).
 
 ### `src/scene/` (Scene, Assets & Resources)
@@ -40,7 +41,7 @@ This document explains **every single file** in the `VK_game_engine` project and
 - **`shaders/shader.task`**: The Tier-2 Vulkan Task Shader. Evaluates sub-mesh meshlet bounding spheres against the camera frustum (toggleable via key `7`), tests for cone backface culling (toggleable via key `8`), and performs robust Hi-Z occlusion culling (toggleable via key `9`) using linear metric eye-distance testing (`mesh_linear_dist > hiz_linear_dist + 0.25m`), viewport perimeter guards, and bounded mip downsampling to mitigate false-positive culling on concave craters or screen edges. Dispatches surviving meshlets to `shader.mesh` and updates atomic debug stats.
 - **`shaders/shader.mesh`**: The Vulkan Mesh Shader. Reads packed meshlet vertex and triangle indices from GPU SSBOs, emits minimal vertex positions (`gl_Position`), and outputs `outMeshletIndex` and per-primitive IDs (`gl_PrimitiveID`) directly to the rasterizer.
 - **`shaders/shader.frag`**: The Visibility Buffer fragment shader. Writes the 64-bit compact ID payload `uvec2((instanceId << 20) | inMeshletIndex, inPrimitiveID)` directly into the `R32G32_UINT` Visibility Buffer.
-- **`shaders/deferred.comp`**: The Fullscreen Visibility Buffer Resolve Compute Shader. Decodes pixel IDs from `inVisibility`, loads the 3 triangle vertices from Bindless SSBOs, analytically reconstructs 2D screen-space barycentric coordinates in NDC, evaluates closed-form analytical screen-space UV derivatives ($\text{dUVdx}, \text{dUVdy}$), and samples Bindless PBR textures using hardware `textureGrad` (anisotropic + trilinear) without artificial LOD clamping or texture popping.
+- **`shaders/deferred.comp`**: The Fullscreen Visibility Buffer Resolve Compute Shader. Decodes pixel IDs from `inVisibility`, loads the 3 triangle vertices from Bindless SSBOs, analytically reconstructs 2D screen-space barycentric coordinates in NDC, evaluates closed-form analytical screen-space UV derivatives ($\text{dUVdx}, \text{dUVdy}$), samples Bindless PBR textures using hardware `textureGrad` (anisotropic + trilinear) without artificial LOD clamping, and executes hardware inline ray queries (`rayQueryInitializeEXT`, `rayQueryProceedEXT`) against the scene TLAS to evaluate contact-accurate directional shadows with normal-offset bias.
 
 ## `tools/` (Offline Asset Pipeline & Packaging)
 - **`tools/model_compiler.cpp`**: Standalone offline asset pipeline. Reads raw `.gltf` and `.obj` files:
@@ -58,13 +59,14 @@ This document explains **every single file** in the `VK_game_engine` project and
 
 ## How They Connect (The Complete Pipeline Flow)
 
-1. **Bootstrapping**: `demo/main.cpp` calls `engine::init()`, which initializes `window`, `device`, `swapchain`, and `pipeline` in order, setting up both graphics and compute pipelines and allocating the Visibility Buffer and Depth targets.
-2. **Asset Loading**: `demo/main.cpp` requests models through `asset_pool`. `model::load_glb()` loads the multi-LOD meshlet payload, pushes vertex/meshlet SSBOs to VRAM, extracts embedded textures, and `texture.cpp` generates trilinear mipmap chains.
-3. **Bindless Sync**: `asset_pool::build_materials_ssbo()` compiles all material properties into the global `MaterialSSBO` and registers all texture views/samplers into the single unbounded Global Descriptor Set.
-4. **Logic Update**: In the frame loop, `input` processes keyboard/mouse events, `camera` computes the View/Projection matrices and frustum planes, and active ECS entities update their `Transform` components.
+1. **Bootstrapping**: `demo/main.cpp` calls `engine::init()`, which initializes `window`, `device`, `swapchain`, and `pipeline` in order, setting up both graphics and compute pipelines, enabling ray tracing extensions (`VK_KHR_acceleration_structure`, `VK_KHR_ray_query`), and allocating the Visibility Buffer and Depth targets.
+2. **Asset Loading**: `demo/main.cpp` requests models through `asset_pool`. `model::load_glb()` loads the multi-LOD meshlet payload, pushes vertex/meshlet SSBOs to VRAM with BDA flags, builds the mesh's Bottom-Level Acceleration Structure (BLAS) on the GPU, extracts embedded textures, and `texture.cpp` generates trilinear mipmap chains.
+3. **Bindless Sync**: `asset_pool::build_materials_ssbo()` compiles all material properties into the global `MaterialSSBO`, registers all texture views/samplers into the single unbounded Global Descriptor Set, and prepares the TLAS acceleration structure descriptor.
+4. **Logic Update**: In the frame loop, `input` processes keyboard/mouse events (including hotkey `T` for RT shadows and keys `0`–`6` for LOD selection), `camera` computes the View/Projection matrices and frustum planes, and active ECS entities update their `Transform` components.
 5. **Rendering Pass**:
-   - **Phase A (Tier-1 Compute Pre-Cull)**:
+   - **Phase A (Tier-1 Compute Pre-Cull & TLAS Build)**:
      - `engine.cpp` uploads instance bounding boxes and transforms into `instanceBuffers`.
+     - `raytracing::build_tlas()` updates active scene instance matrices and records `vkCmdBuildAccelerationStructuresKHR` guarded by an acceleration structure memory barrier.
      - `cull.comp` runs: tests instance AABBs against frustum planes and previous-frame Hi-Z depth pyramid, computes projected triangle pixel size to select LOD level (0–5), and writes `VkDrawMeshTasksIndirectCommandEXT` directly into `indirectBuffers`.
      - A pipeline barrier synchronizes compute writes to indirect draw reads (`VK_ACCESS_INDIRECT_COMMAND_READ_BIT`).
    - **Phase B (Visibility Geometry Pass)**:
@@ -74,9 +76,9 @@ This document explains **every single file** in the `VK_game_engine` project and
      - `shader.mesh` emits screen vertices and primitive indices; `shader.frag` writes 64-bit `(instanceId | meshletIndex, primitiveID)` payloads.
    - **Phase C (Hi-Z Pyramid Downsample)**:
      - The depth buffer is downsampled across a multi-level mip pyramid using compute/blit shaders to serve conservative occlusion culling for subsequent frames.
-   - **Phase D (Fullscreen Deferred Visibility Resolve)**:
+   - **Phase D (Fullscreen Deferred Visibility Resolve & Hardware Ray Queries)**:
      - A pipeline barrier transitions the Visibility Buffer to `VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL`.
-     - `deferred.comp` runs: samples each pixel's 64-bit ID, loads triangle vertices from the global SSBOs, reconstructs 2D NDC barycentrics with perspective correction, evaluates texel footprint, and writes shaded PBR color to the swapchain image without redundant fragment shading on occluded surfaces.
+     - `deferred.comp` runs: samples each pixel's 64-bit ID, loads triangle vertices from the global SSBOs, reconstructs 2D NDC barycentrics with perspective correction, evaluates texel footprint, fires hardware inline ray queries via `rayQueryProceedEXT` against the TLAS for direct directional lighting occlusion, and writes shaded Cook-Torrance PBR color to the swapchain image without redundant fragment shading or primary ray traversal overhead.
    - **Phase E (Debug Overlay & Presentation)**:
-     - `imgui` renders the debug HUD (FPS, active LOD, meshlet culling counts, freeze camera toggle, manual LOD overrides).
+     - `imgui` renders the debug HUD (FPS, active LOD, RT shadow status, meshlet culling counts, freeze camera toggle, manual LOD overrides).
      - `engine.cpp` submits the command buffer and presents the swapchain image to the display.

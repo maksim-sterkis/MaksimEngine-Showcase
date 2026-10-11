@@ -14,6 +14,7 @@ graph TD
     subgraph Step 2 & 3: Asset Load & Bindless Sync
         Main1 -->|Requests Model| Pool[asset_pool]
         Pool -->|model::load_glb| Mod[model.cpp: 6-Level Meshlet LODs]
+        Mod -->|Build BLAS| BLAS[(Bottom-Level AS: Geometry)]
         Mod -->|Embedded Textures| Tex[texture.cpp: Generate Mipmaps]
         Tex -->|Uploads to GPU| VRAM[(GPU VRAM: SSBOs & Textures)]
         
@@ -23,16 +24,18 @@ graph TD
 
     %% Step 4
     subgraph Step 4: Logic Update
-        Inp[input: F2 Freeze / F3 UI / WASD] -->|Updates| Cam[camera: View/Proj & Frustum Planes]
+        Inp[input: Key T Shadows / Keys 0-6 LOD / F2 Freeze] -->|Updates| Cam[camera: View/Proj & Frustum Planes]
         ECS[ecs] -->|Transforms & Bounding Boxes| Instances[Upload Instance SSBO]
     end
 
     %% Step 5
     subgraph Step 5: Rendering Pass
         %% Phase A
-        subgraph Phase A: Tier-1 GPU Pre-Cull
+        subgraph Phase A: Tier-1 GPU Pre-Cull & TLAS Build
             Instances --> CullComp[shaders/cull.comp]
             Cam --> CullComp
+            Instances --> TLAS[raytracing: Build Dynamic TLAS]
+            TLAS --> Desc
             CullComp -->|Frustum & Hi-Z Test| CullDecide{Visible?}
             CullDecide -->|Yes: Triangle Pixel Math| PickLOD[Select LOD 0-5]
             PickLOD -->|Populate Draw Command| IndBuffer[(Indirect Draw SSBO)]
@@ -47,10 +50,11 @@ graph TD
         end
 
         %% Phase C & D
-        subgraph Phase C & D: Hi-Z & Deferred Resolve
+        subgraph Phase C & D: Hi-Z & Deferred Resolve with RT Shadows
             VisBuf --> DefComp[shaders/deferred.comp]
-            Desc -.->|Bindless SSBOs & Mipmaps| DefComp
-            DefComp -->|Analytical Barycentric Reconstruction| ShadedFrame[Shaded Frame: VisBuffer Deferred Resolve]
+            Desc -.->|Bindless SSBOs & TLAS| DefComp
+            DefComp -->|Ray Query: Shadow Rays| RayQ[rayQueryProceedEXT: RT Shadows]
+            RayQ --> ShadedFrame[Shaded Frame: Cook-Torrance + RT Shadows]
         end
 
         ShadedFrame --> UI[imgui: Debug HUD & Controls]

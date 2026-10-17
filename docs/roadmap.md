@@ -127,6 +127,25 @@ This plan outlines the next major architectural upgrades for the engine, focusin
      - Hotkey `T` toggles hardware ray-traced shadows at runtime without conflicting with LOD selection hotkeys `0`–`6`.
      - F3 HUD live-reports active RT BLAS level and triangle count alongside rasterized mesh LOD (`RT BLAS: L%u (%u tris)`).
      - Dynamic sun azimuth and elevation controls with real-time HUD and F4 performance telemetry status.
+  7. **Sub-Pixel Screen-Space Geometric Surface Error Metric**:
+     - Replaced empirical triangle edge length heuristic with rigorous sub-pixel screen-space geometric surface error metric.
+     - Upgraded `tools/model_compiler.cpp` to calculate true cumulative geometric deviation in meters (`meshopt_simplifyScale` * `resultError`) across all 6 LOD levels.
+     - Updated `shaders/cull.comp` and CPU telemetry to compute projected surface deviation:
+       $$\text{projectedErrorPixels} = \frac{\text{surfaceError} \times \text{viewportHeight}}{2 \times \text{dist} \times \tan(\text{fov} / 2)}$$
+       Transitioning to coarser LODs only when visual surface deviation stays strictly $\le 1.0\text{ px}$.
+  8. **Embedded KTX2 Textures in Self-Contained GLB**:
+     - Upgraded `tools/model_compiler.cpp` to embed pre-compressed KTX2 BC7/BC5 texture payloads directly into binary `.glb` chunks (`BufferView`) rather than referencing external files.
+     - Implemented in-memory KTX2 streaming in `src/scene/texture.cpp` via `ktxTexture2_CreateFromMemory` and `ktxTexture2_IterateLevels`.
+     - Added CLI parameter parsing (`--force`, explicit input/output files) to the model compiler for flexible asset iteration.
+  9. **F4 Performance Dashboard & Telemetry Stabilization**:
+     - Overhauled F4 telemetry into a clean Frame Time (ms) rolling graph sampled in frozen 5ms time slots (2048 slots), eliminating horizontal phase shimmering and frame jitter.
+     - Dynamically bound graph ceiling to highest visible frame time (+10% headroom) that immediately recovers once frame spikes scroll off screen.
+     - Fixed center-seam phase inversion artifact by passing exact positive widths to `ImGui::PlotLines`.
+     - Displayed live `Low`, `Avg`, and `Max` frame times with clarification disclaimer.
+     - Suppressed ImGui's built-in 200 Hz flickering hover tooltip and line highlights via `ImGuiItemFlags_Disabled` without altering visual styling.
+  10. **Camera Positioning & Dynamic Target Alignment**:
+     - Set default camera position to `(3.0f, 1.0f, 0.0f)`.
+     - Dynamically calculated starting camera pitch and yaw from the model's true 3D bounding box center (`(aabbMin + aabbMax) * 0.5f`) so the target geometry is centered upon engine boot.
 
 ## Phase 5 (Next-Gen Lighting - ReSTIR & Denoising)
 - **Status**: **PENDING**

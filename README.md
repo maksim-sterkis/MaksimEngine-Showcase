@@ -4,7 +4,7 @@
 [![Platform](https://img.shields.io/badge/Platform-Windows%20x64-0078D6?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/maksim-sterkis/MaksimEngine-Showcase/releases)
 [![C++20](https://img.shields.io/badge/C%2B%2B-20-00599C?style=for-the-badge&logo=c%2B%2B&logoColor=white)](https://en.cppreference.com/w/cpp/20)
 [![Pipeline](https://img.shields.io/badge/Pipeline-Mesh%20Shaders%20%2B%20VisBuffer-orange?style=for-the-badge)](docs/file.md)
-[![Release](https://img.shields.io/badge/Release-v0.1.1-8A2BE2?style=for-the-badge&logo=github)](https://github.com/maksim-sterkis/MaksimEngine-Showcase/releases)
+[![Release](https://img.shields.io/badge/Release-v0.2.0-8A2BE2?style=for-the-badge&logo=github)](https://github.com/maksim-sterkis/MaksimEngine-Showcase/releases)
 
 A Vulkan 1.3 experimental rendering engine written in C++20, implementing a modern GPU-driven pipeline with mesh shaders, visibility buffer shading, discrete meshlet LODs, and hierarchical-Z occlusion culling.
 
@@ -15,9 +15,9 @@ A Vulkan 1.3 experimental rendering engine written in C++20, implementing a mode
 - **Two-Phase GPU Culling & Indirect Dispatch**:
   - *Instance Pre-Cull (`shaders/cull.comp`)*: Evaluates bounding box frustum culling and Hi-Z occlusion tests, calculates rigorous sub-pixel screen-space geometric surface error ($\le 1.0\text{ px}$ budget) to select the optimal discrete LOD step, and writes indirect draw commands (`VkDrawMeshTasksIndirectCommandEXT`).
   - *Meshlet Culling (`shaders/shader.task`)*: Evaluates meshlet bounding spheres against the view frustum, cone backface orientation, and conservative Hi-Z occlusion. Features metric linear-depth testing (`mesh_linear_dist > hiz_linear_dist + 0.25m`), viewport perimeter guards, and bounded mip downsampling to reliably prevent false-positive culling on concave craters and screen edges.
-- **Hardware Ray-Traced Shadows & Dynamic TLAS Pointer Swapping**: Exact directional shadows powered by physical GPU RT cores via `VK_KHR_acceleration_structure` and `VK_KHR_ray_query`. Integrates inline ray queries directly into the Visibility Buffer deferred resolve pass (`shaders/deferred.comp`), completely bypassing primary ray traversal and firing coherent shadow rays exclusively from visible surface pixels with normal-offset bias. Features dynamic per-frame TLAS pointer swapping that synchronizes the active BLAS geometry (`lodBlas[0..5]`) to the rasterized mesh LOD, preventing self-shadowing acne and geometric mismatch.
+- **Hardware Ray-Traced Shadows & Dynamic TLAS Pointer Swapping**: Exact directional shadows powered by physical GPU RT cores via `VK_KHR_acceleration_structure` and `VK_KHR_ray_query`. Integrates inline ray queries directly into the Visibility Buffer deferred resolve pass (`shaders/deferred.comp`), completely bypassing primary ray traversal and firing coherent shadow rays exclusively from visible surface pixels with normal-offset bias. Features dynamic per-frame TLAS pointer swapping that synchronizes the active BLAS geometry (`lodBlas[0..5]`) to the rasterized mesh LOD by default (with runtime toggle `Y` to switch between active visible LOD and ground-truth LOD 0), preventing self-shadowing acne and geometric mismatch.
 - **Interactive Controls & Hotkeys**:
-  - Hotkey `T` toggles hardware ray-traced shadows on and off at runtime; F4 HUD exposes interactive sun azimuth, elevation, and intensity controls.
+  - Hotkey `T` toggles hardware ray-traced shadows on and off; Hotkey `Y` toggles ray tracing against the active visible LOD (default) vs. ground-truth LOD 0; F4 HUD exposes interactive sun azimuth, elevation, intensity, and RT LOD mode controls.
   - Hotkeys `7`, `8`, `9` toggle Frustum, Cone, and Hi-Z culling stages independently at runtime with live atomic counters displayed on the HUD.
   - Hotkeys `0` (Auto) and `1`–`6` (Force LOD 0–5) provide instant runtime LOD inspection.
   - Hotkey `F1` / `M` toggles debug meshlet cluster coloring; `F2` freezes the culling camera for free-flight inspection.
@@ -52,7 +52,7 @@ For a complete breakdown of every directory, component, and the GPU pipeline flo
 
 ## Release Downloads
 
-Standalone, zero-dependency portable release archives (Windows 64-bit) are available on the [GitHub Releases](https://github.com/maksim-sterkis/MaksimEngine-Showcase/releases) page. Simply download, extract, and launch `VK_game_engine.exe`.
+Standalone, zero-dependency portable release archives (Windows 64-bit) are available on the [GitHub Releases](https://github.com/maksim-sterkis/MaksimEngine-Showcase/releases) page (Latest: [**v0.2.0**](https://github.com/maksim-sterkis/MaksimEngine-Showcase/releases/tag/v0.2.0)). Simply download `MaksimEngine-v0.2.0-Portable.zip`, extract, and launch `VK_game_engine.exe`.
 
 ## Credits & Dependencies
 - [Vulkan](https://www.vulkan.org/)

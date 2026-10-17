@@ -24,7 +24,7 @@ graph TD
 
     %% Step 4
     subgraph Step 4: Logic Update
-        Inp[input: Key T Shadows / Keys 0-6 LOD / F2 Freeze / Sun Controls] -->|Updates| Cam[camera: View/Proj & Frustum Planes]
+        Inp[input: Key T Shadows / Key Y RT LOD / Keys 0-6 LOD / F2 Freeze / Sun Controls] -->|Updates| Cam[camera: View/Proj & Frustum Planes]
         ECS[ecs] -->|Transforms & Bounding Boxes| Instances[Upload Instance SSBO]
     end
 
@@ -36,7 +36,7 @@ graph TD
             Cam --> CullComp
             CullComp -->|Frustum & Hi-Z Test| CullDecide{Visible?}
             CullDecide -->|Yes: Sub-Pixel Error <= 1.0px| PickLOD[Select LOD 0-5]
-            PickLOD -->|Dynamic Pointer Swap: Matching BLAS| TLAS[raytracing: Build Dynamic TLAS]
+            PickLOD -->|Dynamic Pointer Swap: Visible BLAS or LOD 0| TLAS[raytracing: Build Dynamic TLAS]
             TLAS --> Desc
             PickLOD -->|Populate Draw Command| IndBuffer[(Indirect Draw SSBO)]
         end

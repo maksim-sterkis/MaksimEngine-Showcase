@@ -47,7 +47,8 @@ For a complete breakdown of every directory, component, and the GPU pipeline flo
 > *Note: When viewing the chart on GitHub, be sure to click the **Fullscreen button** (the expanding arrows icon in the top right of the diagram box) so you can easily read the nodes and use the view controls.*
 
 ## Images
-<img src="https://github.com/user-attachments/assets/51e2e0f5-ec02-458e-b2f3-72a4e18ddf5e" alt="VK Game Engine - Meshlet LOD & Visibility Buffer Tech Demo" width="100%" />
+<img width="1487" height="1069" alt="Screenshot 2026-10-16 205928" src="https://github.com/user-attachments/assets/138fc5b0-ec4a-4b61-a595-2b71d36fdbca" />
+
 
 ## Release Downloads
 

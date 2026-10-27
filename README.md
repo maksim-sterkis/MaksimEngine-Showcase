@@ -57,7 +57,7 @@ For a complete breakdown of every directory, component, and the GPU pipeline flo
 > *Note: When viewing the chart on GitHub, be sure to click the **Fullscreen button** (the expanding arrows icon in the top right of the diagram box) so you can easily read the nodes and use the view controls.*
 
 ## Images
-<img src="docs/images/boulder-v0.2.1.jpg" alt="MaksimEngine v0.2.1 - Boulder with DLAA, ray-traced shadows and performance telemetry" width="100%" />
+<img src="docs/images/boulder-v0.2.1.png" alt="MaksimEngine v0.2.1 - Boulder with ray-traced shadows" width="100%" />
 
 ## Release Downloads
 

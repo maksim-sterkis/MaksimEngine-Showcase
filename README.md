@@ -1,5 +1,7 @@
 # VK Game Engine
 
+<img src="docs/images/boulder-v0.2.1.png" alt="MaksimEngine v0.2.1 - Boulder with ray-traced shadows" width="100%" />
+
 [![Vulkan](https://img.shields.io/badge/Vulkan-1.3-ED1B24?style=for-the-badge&logo=vulkan&logoColor=white)](https://www.vulkan.org/)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20x64-0078D6?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/maksim-sterkis/MaksimEngine-Showcase/releases)
 [![C++20](https://img.shields.io/badge/C%2B%2B-20-00599C?style=for-the-badge&logo=c%2B%2B&logoColor=white)](https://en.cppreference.com/w/cpp/20)
@@ -55,9 +57,6 @@ For a complete breakdown of every directory, component, and the GPU pipeline flo
 > **Visualizing the Engine:** We also have an interactive Mermaid.js diagram showing exactly how data moves from CPU to GPU. Check out the **[Pipeline Flowchart](docs/flow.md)**.
 >
 > *Note: When viewing the chart on GitHub, be sure to click the **Fullscreen button** (the expanding arrows icon in the top right of the diagram box) so you can easily read the nodes and use the view controls.*
-
-## Images
-<img src="docs/images/boulder-v0.2.1.png" alt="MaksimEngine v0.2.1 - Boulder with ray-traced shadows" width="100%" />
 
 ## Release Downloads
 

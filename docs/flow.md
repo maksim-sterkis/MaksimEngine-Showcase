@@ -1,63 +1,78 @@
+# Current Engine Pipeline
+
+This diagram describes the implemented boulder renderer after Phase 4.1. F4 is the performance overlay and F5 contains interactive diagnostics. Phase 5 scene/material expansion, emissive area lighting, ReSTIR DI and SVGF are planned additions; multi-bounce GI is outside that phase.
+
 ```mermaid
-graph TD
-    %% Step 1
-    subgraph Step 1: Bootstrapping
-        Main1[main.cpp: Default Cam 3,1,0] -->|vfs::initialize| VFS[VFS: engine.pak / Disk Fallback]
-        Main1 -->|engine::init| Engine[engine.cpp]
-        Engine --> Win[window: GLFW]
-        Engine --> Dev[device: Vulkan 1.3 + Mesh Shaders + RT Extensions]
-        Engine --> Swap[swapchain: VisBuffer R32G32_UINT + Depth]
-        Engine --> Pipe[pipeline: Graphics & Compute Pipelines]
+flowchart TD
+    subgraph Init["Initialization"]
+        Main["demo/main.cpp"] --> VFS["VFS: engine.pak or loose files"]
+        Main --> Runtime["Streamline initialization or native-only path"]
+        Runtime --> Device["Vulkan instance/device and dispatch hooks"]
+        Device --> Targets["Swapchain, two geometry slots, HDR and guide targets"]
+        Main --> Assets["Boulder GLB: geometry, materials and textures"]
+        Assets --> BLAS["Six LOD BLAS and scene TLAS"]
+        Assets --> Bindless["Model SSBOs and global materials/textures"]
     end
 
-    %% Step 2 & 3
-    subgraph Step 2 & 3: Asset Load & Bindless Sync
-        Main1 -->|Requests Model| Pool[asset_pool]
-        Pool -->|model::load_glb| Mod[model.cpp: 6-Level Meshlet LODs]
-        Mod -->|Build Discrete BLAS| BLAS[(Multi-LOD BLAS: lodBlas 0..5)]
-        Mod -->|Embedded KTX2 Textures| Tex[texture.cpp: Generate Mipmaps]
-        Tex -->|Uploads to GPU| VRAM[(GPU VRAM: SSBOs & Textures)]
-        
-        Pool -->|build_materials_ssbo| Desc[Global Descriptor Set: Bindless]
-        Pool -->|Pack Materials| SSBO[(Material & Meshlet SSBOs)]
+    subgraph CPU["Frame Scheduling and Input"]
+        Targets --> Fence["Wait for reusable frame slot"]
+        Fence --> Reflex["Frame token, Reflex options and scheduling sleep"]
+        Reflex --> SimStart["Simulation-start marker"]
+        SimStart --> Input["Poll input and PCL pings; update camera/object/UI"]
+        Input --> SimEnd["Simulation-end marker"]
+        SimEnd --> Acquire["Configure rendering; acquire and retire swapchain image"]
+        Acquire --> Frame["Current/previous transforms, jitter and depth-history metadata"]
     end
 
-    %% Step 4
-    subgraph Step 4: Logic Update
-        Inp[input: Key T Shadows / Key Y RT LOD / Keys 0-6 LOD / F2 Freeze / Sun Controls] -->|Updates| Cam[camera: View/Proj & Frustum Planes]
-        ECS[ecs] -->|Transforms & Bounding Boxes| Instances[Upload Instance SSBO]
+    subgraph Geometry["Culling and Visibility"]
+        Frame --> Cull["Object frustum pre-cull and screen-space-error LOD"]
+        Cull --> TLAS["Update TLAS with selected visible LOD or LOD 0"]
+        BLAS --> TLAS
+        Cull --> Path{"Hi-Z path"}
+        Path -->|"Off / warm-up / unchanged / frozen"| Single["One geometry pass with applicable culling"]
+        Path -->|"Compatible moving or jittered view"| Predict["Predict against previous producing-camera depth"]
+        Predict --> Initial["Raster predicted-visible meshlets; queue deferred meshlets"]
+        Initial --> CurrentDepth["Build current reverse-Z minimum pyramid"]
+        CurrentDepth --> Recover["GPU indirect recovery test and raster with attachment LOAD"]
+        Single --> Visibility["Completed visibility IDs and hardware depth"]
+        Recover --> Visibility
     end
 
-    %% Step 5
-    subgraph Step 5: Rendering Pass
-        %% Phase A
-        subgraph Phase A: Tier-1 GPU Pre-Cull & TLAS Build
-            Instances --> CullComp[shaders/cull.comp]
-            Cam --> CullComp
-            CullComp -->|Frustum & Hi-Z Test| CullDecide{Visible?}
-            CullDecide -->|Yes: Sub-Pixel Error <= 1.0px| PickLOD[Select LOD 0-5]
-            PickLOD -->|Dynamic Pointer Swap: Visible BLAS or LOD 0| TLAS[raytracing: Build Dynamic TLAS]
-            TLAS --> Desc
-            PickLOD -->|Populate Draw Command| IndBuffer[(Indirect Draw SSBO)]
-        end
+    subgraph Lighting["HDR Lighting and Reconstruction"]
+        Visibility --> Deferred["Deferred attribute reconstruction, PBR and directional-sun shadow queries"]
+        Bindless --> Deferred
+        TLAS --> Deferred
+        Deferred --> HDR["Linear HDR lighting"]
+        Deferred --> Guides["Demanded motion/depth/normal/identity/validity guides"]
+        HDR --> Mode{"Effective reconstruction"}
+        Guides --> SDK
+        Mode -->|"DLAA / DLSS K"| SDK["Streamline temporal reconstruction"]
+        Mode -->|"Native 100%"| Native["Current HDR directly"]
+        Mode -->|"Reduced Native diagnostics"| Spatial["Spatial reconstruction"]
+        SDK --> Display["Tone mapping, background and output viewport"]
+        Native --> Display
+        Spatial --> Display
+    end
 
-        %% Phase B
-        subgraph Phase B: Visibility Geometry Pass
-            IndBuffer -->|vkCmdDrawMeshTasksIndirectEXT| TaskSh[shaders/shader.task]
-            TaskSh -->|Sub-mesh Frustum/Cone/Hi-Z| MeshSh[shaders/shader.mesh]
-            MeshSh -->|Compact Primitives| FragSh[shaders/shader.frag]
-            FragSh -->|Write 64-bit Payload| VisBuf[(Visibility Buffer R32G32_UINT)]
-        end
-
-        %% Phase C & D
-        subgraph Phase C & D: Hi-Z & Deferred Resolve with RT Shadows
-            VisBuf --> DefComp[shaders/deferred.comp]
-            Desc -.->|Bindless SSBOs & TLAS| DefComp
-            DefComp -->|Inline Ray Query: Shadow Rays| RayQ[rayQueryProceedEXT: RT Shadows]
-            RayQ --> ShadedFrame[Shaded Frame: Cook-Torrance + RT Shadows]
-        end
-
-        ShadedFrame --> UI[imgui: F3 HUD & F4 Frame Time Telemetry]
-        UI --> Present[engine.cpp: Submit & Present to Screen]
+    subgraph Finish["UI, History and Presentation"]
+        Display --> UI["Output-resolution F3 HUD, F4 performance, F5 diagnostics and menus"]
+        UI --> FinalDepth["Finalize required Hi-Z / paired F2 capture"]
+        Visibility -.-> FinalDepth
+        FinalDepth --> Submit["Submit and present markers with supported frame IDs"]
+        Submit --> Present["Mailbox / explicit Immediate / FIFO"]
+        Submit --> Commit["Commit successful-submission temporal and depth snapshots"]
+        Commit -.-> Frame
+        Present --> Recreate{"Recreation required?"}
+        Recreate -->|"Yes"| Reset["Recreate affected resources and invalidate histories"]
+        Reset -.-> Targets
+        Recreate -->|"No"| Fence
     end
 ```
+
+Geometry targets, HDR/guide images and history use submission-owned frame slots; acquired swapchain-image indices protect output images, descriptors and command buffers separately. Normal rendering has no test-image readback or added device-idle wait. Frame-slot/image fences and Reflex scheduling may wait.
+
+Exactly unchanged views use compatible previous depth in one pass. Moving/jittered views recover predicted-occluded meshlets before lighting; overflow fails open by rendering immediately. Hi-Z history is independent of optional temporal guides and lighting resets.
+
+Native color does not accumulate previous color. DLAA/DLSS owns its reconstruction history; future ReSTIR reservoirs and SVGF lighting histories will require their own state and invalidation. The current visibility/material path is still tailored to the boulder.
+
+See [file architecture](file.md), [verification and limits](file.md#verification-and-limits) and the [Phase 5 roadmap](roadmap.md).

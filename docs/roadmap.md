@@ -148,11 +148,72 @@ This plan outlines the next major architectural upgrades for the engine, focusin
      - Set default camera position to `(3.0f, 1.0f, 0.0f)`.
      - Dynamically calculated starting camera pitch and yaw from the model's true 3D bounding box center (`(aabbMin + aabbMax) * 0.5f`) so the target geometry is centered upon engine boot.
 
-## Phase 5 (Next-Gen Lighting - ReSTIR & Denoising)
+## Phase 4.1 (Temporal Rendering, DLSS & Reflex)
+- **Status**: **CLOSED** (implemented foundation retained; all unfinished work moved to Phase 5). Closure reflects the revised scope, not completion of the outstanding validation or distribution checks.
+- **Goal**: Establish the temporal rendering foundation, model K DLAA/DLSS Super Resolution, independent Reflex controls, and presentation/performance diagnostics for the boulder demo.
+- **Why**: Supports image stability and lower-resolution rendering, and supplies the initial temporal infrastructure for Phase 5 direct lighting and denoising. Performance gains must be measured per scene.
+- **Implemented Work**:
+  1. **Temporal Rendering Foundation**:
+     - **Status**: **IMPLEMENTED FOR THE BOULDER DEMO**. Camera jitter, unjittered motion vectors, previous camera/object transforms, full object transforms and inverse-transpose normals are in place.
+     - Lighting uses linear HDR targets with independent internal/output dimensions; reconstruction precedes tone mapping and output-resolution UI. History resets and surface-validity checks cover cuts, target/mode changes, disocclusion and LOD changes.
+     - Ordinary Native rendering is unjittered and has no temporal color accumulation or standalone TAA resolve. Native jitter/scale previews are session-only diagnostics; active DLAA/DLSS controls jitter and input dimensions automatically.
+     - Ordinary Native color skips optional temporal guides; NVIDIA modes and diagnostic views generate the guides they consume. Empty scenes explicitly initialize HDR, and reconstruction switches retain the swapchain and reuse same-size targets. Unrelated Settings Apply changes preserve reconstruction history.
+     - **Hi-Z repair implemented**: independent depth history, unchanged-view single pass, predictive/recovery culling for movement and jitter, conservative odd-size pyramids, valid task lanes and paired F2 capture. The original 216 exact depth/HDR comparisons and a further 144 Quality/K comparisons matched Hi-Z-off references.
+     - Debug CPU tests, synchronization-validation smoke and automated minimize/restore checks passed on the RTX 3090. See [rendering architecture and verification limits](file.md) for the current pipeline and recorded coverage.
+  2. **DLAA & DLSS Super Resolution Integration**:
+     - **Status**: **MODEL K IMPLEMENTED** through pinned Streamline 2.14.16 on Windows/MinGW Debug. Modes are Native, DLAA, DLSS Quality, Balanced and Performance. Native is the first-launch rendering default; K is fixed for all NVIDIA modes.
+     - Persistent settings retain requested mode separately from effective mode. Runtime capability checks and missing-runtime/evaluation-failure handling fall back to Native with a visible reason. A native-only build is supported.
+     - **DLSS 4.5 M/L integration removed**; obsolete model settings are ignored. Standalone TAA, Frame Generation, Ray Reconstruction and dynamic resolution are outside the implemented scope.
+     - Real RTX 3090 evaluations, CPU tests, synchronization-validation checks, source-image comparisons and Native fallback checks passed. Earlier Debug measurements put reconstruction near 1.3 ms on the small boulder scene, exceeding the lighting savings; they do not establish a throughput gain or a speedup from the later cleanup.
+     - See [architecture and verification limits](file.md) for runtime staging, recorded checks and remaining validation.
+  3. **Reflex, Presentation & Diagnostics**:
+     - **Status**: **IMPLEMENTED**. Settings provides independent NVIDIA Reflex Off / On / On + Boost, defaulting to On when supported, for Native and all four NVIDIA reconstruction modes. Effective status/fallback, scheduling sleep, latency markers and driver timing are exposed; the application Reflex FPS limiter is disabled.
+     - Presentation is a persistent Mailbox / Immediate / VSync (FIFO) selector with Apply/Accept/Cancel and legacy VSync migration. Mailbox is the default; Immediate is explicit and may tear. Requested and actual presentation modes are reported separately.
+     - F4 is a compact passive performance overlay with mode, dimensions, key GPU timings and frame-time graph. F5 holds interactive reconstruction/temporal, Reflex, RT/lighting, geometry/culling and detailed timing diagnostics. The RT-on/off estimate includes lighting-path differences and is not isolated ray-traversal cost.
+     - The fixed-window 15-combination reconstruction/Reflex synchronization-validation smoke passed; missing Reflex retained working DLAA, and native-only operation passed. Driver timing is not full input-to-display latency, and no latency reduction is established by these runs.
+     - **Mailbox pacing workaround implemented**: the current backend loads a signature-verified copy of Streamline as `vke_sl_interposer.dll` to avoid the canonical-name-triggered throttle. Earlier 3/4/5-image tests and the Reflex matrix remained near 200 FPS at 3440x1440 before this change; they do not measure the current workaround. The normal swapchain image-count policy is retained. Current Reflex latency benefits still need measurement; the [integration notes](file.md#verification-and-limits) distinguish the implemented workaround from the historical canonical-filename results.
+- **References**:
+  - [NVIDIA DLSS integration overview](https://developer.nvidia.com/rtx/dlss)
+
+## Phase 5 (Benchmark Scenes, Emissive Lighting, ReSTIR DI & Denoising)
 - **Status**: **PENDING**
-- **Goal**: Implement ReSTIR DI (Direct Illumination) and GI (Global Illumination), alongside an SVGF denoiser.
-- **Why**: Provides high-quality direct and indirect lighting sample convergence.
+- **Goal**: Complete the work carried over from Phase 4.1, build efficient emissive area lighting and benchmark scenes, and implement ReSTIR DI with an SVGF denoiser.
+- **Why**: Establishes accurate, scalable direct illumination and representative scenes for measuring image quality, GPU cost and temporal stability.
+- **Scope**: Direct illumination. Multi-bounce global illumination and color bleeding are outside this phase.
 - **Tasks**:
-  1. Implement ReSTIR DI to efficiently sample many light sources.
-  2. Implement ReSTIR GI for multi-bounce diffuse indirect lighting.
-  3. Implement an SVGF (Spatiotemporal Variance-Guided Filter) denoiser to clean up stochastic RT noise.
+  1. **Scene Materials & Emissive Area-Lighting Foundation**:
+     - Support reliable per-surface instance, mesh and material identification in Visibility Buffer shading, extending the current boulder transform/temporal support to general scenes. Keep rasterized and ray-query material/alpha handling consistent.
+     - Import emissive color, strength and textures into the bindless material system. Use consistent linear-HDR emission for visible surfaces and their lighting contribution.
+     - Build compact GPU light data for emissive triangles with stable identities, reconstructable surface samples and explicit topology/LOD invalidation. Reuse static data and update changed lights without per-frame allocations or CPU readbacks.
+     - Implement power-based light selection, appropriate area-light sampling and correct sampling probabilities; use light/material multiple importance sampling where it improves quality per millisecond. Trace robust finite shadow segments toward sampled emitter positions.
+     - Separate surface access, light/sample reconstruction, emission/material evaluation and visibility testing into reusable functions for ReSTIR DI. Establish a high-sample direct-lighting reference and measure light preparation, sampling and ray-traversal costs.
+  2. **Cornell Box Scene**:
+     - **Status**: **PENDING**.
+     - Build a GLB from Cornell's measured diffuse two-block reference, preserving geometry, scale, camera placement and source data. Document the conversion of measured spectral reflectance/emission to the engine's RGB representation.
+     - Implement the red/green walls, diffuse neutral surfaces, interior blocks and rectangular ceiling emitter using the shared material/light system.
+     - Establish a direct area-lighting baseline with soft shadows and no artificial ambient fill. Indirect illumination and color bleeding remain future work outside Phase 5.
+  3. **Crytek Sponza Scene**:
+     - **Status**: **PENDING**.
+     - Import through the model compiler and texture pipeline, preserving scene transforms, multiple meshes and materials, textures, and alpha-masked surfaces.
+     - Extend the existing boulder transform/temporal support to general scene rendering. Visibility Buffer resolve still needs reliable per-surface instance, mesh and material identification rather than the demo's single-model/material assumptions; raster and ray-query material/alpha handling must agree.
+     - Record the exact asset version, source, licensing terms, and attribution with the scene assets.
+  4. **Scene Selection & Benchmark Validation**:
+     - **Status**: **PENDING**. The boulder remains the only integrated demo scene.
+     - Add an Esc-menu scene selector for the boulder, Cornell box and Crytek Sponza, with camera presets, safe resource transitions and explicit temporal/Hi-Z invalidation on scene changes.
+     - Compare Native, DLAA and DLSS for image stability, ghosting, GPU/frame time and memory use during motion, disocclusion, resizing and LOD transitions. Measure reconstruction and presentation costs separately.
+  5. **ReSTIR DI (Direct Illumination)**:
+     - Use the shared surface/material/light-sampling foundation to generate candidates, then implement temporal and spatial reservoir resampling and final visibility/shading.
+     - Provide current/previous light mapping and validate reused samples against surface identity, motion, depth and normals. Handle disocclusion, scene/light changes, LOD transitions and reconstruction-resolution changes explicitly.
+     - Compare accuracy and GPU cost against the high-sample direct-lighting reference, including many-light scenes. Keep reservoir reuse separate from display reconstruction history.
+  6. **SVGF Denoising**:
+     - Implement spatiotemporal variance-guided filtering for stochastic direct lighting, with suitable lighting outputs, motion/depth/normal guides and history rejection.
+     - Validate noise reduction, detail preservation and response to moving lights, geometry and disocclusion before DLAA/DLSS reconstruction.
+  7. **Remaining Integration Validation & Distribution**:
+     - **Status**: **PENDING**. Extended human image-quality/diagnostic review, a quantitative memory soak and other GPU/driver combinations remain unverified.
+     - Preserve the limits of the cleanup checks: CPU suites and extended temporal/Hi-Z smoke passed, but the longer display matrix was interrupted after Native/all K cases. Later resource-reuse and Native fast/full-guide parity assertions were compiled but not run; after-cleanup performance measurements remain pending.
+     - Measure Reflex Off/On/On + Boost using the current runtime-loading path and distinguish average PC latency from GPU render time.
+     - Development remains Debug-only. CMake stages signed NVIDIA DLLs and notices beside the development executable, outside `engine.pak`; the portable packaging script still needs to stage those dependencies and a future packaged build needs clean-machine verification. Existing Phase 4 Release artifacts do not validate the Phase 4.1 runtime.
+- **References**:
+  - [Cornell box reference data](https://bowers.cornell.edu/computer-graphics/data)
+  - [Crytek Sponza glTF asset and attribution](https://github.com/KhronosGroup/glTF-Sample-Assets/blob/main/Models/Sponza/README.md)
+  - [ReSTIR DI integration and light-data requirements](https://github.com/NVIDIA-RTX/RTXDI/blob/main/Doc/Integration.md)

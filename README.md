@@ -1,6 +1,9 @@
 # VK Game Engine
 
-<img src="docs/images/boulder-v0.2.1.png" alt="MaksimEngine - Boulder with ray-traced shadows" width="100%" />
+<p align="center">
+  <img src="docs/images/boulder-v0.2.1.png" alt="MaksimEngine - Boulder with ray-traced shadows" width="48.5%" />
+  <img src="docs/images/sandbox-v0.3.0.png" alt="MaksimEngine - Lighting Sandbox with ReSTIR DI" width="48.5%" />
+</p>
 
 [![Vulkan](https://img.shields.io/badge/Vulkan-1.3-ED1B24?style=for-the-badge&logo=vulkan&logoColor=white)](https://www.vulkan.org/)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20x64-0078D6?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/maksim-sterkis/MaksimEngine-Showcase/releases)

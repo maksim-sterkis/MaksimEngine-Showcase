@@ -1,12 +1,12 @@
 # VK Game Engine
 
-<img src="docs/images/boulder-v0.2.1.png" alt="MaksimEngine v0.2.1 - Boulder with ray-traced shadows" width="100%" />
+<img src="docs/images/boulder-v0.2.1.png" alt="MaksimEngine - Boulder with ray-traced shadows" width="100%" />
 
 [![Vulkan](https://img.shields.io/badge/Vulkan-1.3-ED1B24?style=for-the-badge&logo=vulkan&logoColor=white)](https://www.vulkan.org/)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20x64-0078D6?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/maksim-sterkis/MaksimEngine-Showcase/releases)
 [![C++20](https://img.shields.io/badge/C%2B%2B-20-00599C?style=for-the-badge&logo=c%2B%2B&logoColor=white)](https://en.cppreference.com/w/cpp/20)
 [![Pipeline](https://img.shields.io/badge/Pipeline-Mesh%20Shaders%20%2B%20VisBuffer-orange?style=for-the-badge)](docs/file.md)
-[![Release](https://img.shields.io/badge/Release-v0.2.1-8A2BE2?style=for-the-badge&logo=github)](https://github.com/maksim-sterkis/MaksimEngine-Showcase/releases/tag/v0.2.1)
+[![Release](https://img.shields.io/badge/Release-v0.3.0-8A2BE2?style=for-the-badge&logo=github)](https://github.com/maksim-sterkis/MaksimEngine-Showcase/releases/tag/v0.3.0)
 
 A Vulkan 1.3 experimental rendering engine written in C++20, implementing a modern GPU-driven pipeline with mesh shaders, visibility buffer shading, discrete meshlet LODs, and hierarchical-Z occlusion culling.
 
@@ -37,18 +37,19 @@ A Vulkan 1.3 experimental rendering engine written in C++20, implementing a mode
 
 ## Roadmap & Upcoming Features
 
-**Phase 5 is in progress: core lighting is implemented; estimator/history validation and performance remain open.** Phase 4.1 is closed with its temporal, DLAA/DLSS and Reflex foundation retained. Phase 5 adds opaque instances, emissive lighting, initial reservoirs, temporal/spatial reuse and fresh final visibility. See [implementation and verification limits](docs/file.md#verification-and-limits).
+**Phase 5 is complete (`v0.3.0`, November 14, 2026).** Phase 4.1's temporal, DLAA/DLSS and Reflex foundation is retained, and Phase 5 ships opaque instances, emissive triangle lighting, initial RIS candidates, temporal/spatial ReSTIR DI reuse, fresh final visibility, emission payload caching and 48-byte packed cached surfaces. See [implementation and verification limits](docs/file.md#verification-and-limits).
 
 Phase 5 covers:
 
-1. **Scene materials and emissive area lighting**: Correct per-surface material lookup, emissive materials, efficient light sampling and reusable lighting functions for ReSTIR DI.
-2. **Controlled lighting sandbox and reference**: Few/many-light presets, opaque objects, motion cases and a 4096-spp direct-light reference.
-3. **ReSTIR DI**: Basic real-time correction and a ray-traced reference policy. Pre-spatial temporal history avoids a failing recursive-feedback path; restoring repeated spatial propagation still requires validation. Conventional MC remains selectable; incomplete stages are diagnostic ablations.
-4. **Validation**: Raw reference comparisons, motion/history checks, synchronization validation and pass costs. Cornell/Sponza, DLSS RR, extended review and distribution follow in Phase 5.1; SVGF stays deferred.
+1. **Scene materials and emissive area lighting**: Correct per-surface material lookup, emissive materials, emission payload caching in light records, efficient light sampling and reusable lighting functions for ReSTIR DI.
+2. **Controlled lighting sandbox and reference**: Few/many-light presets (`3` and `64` emitters), opaque objects, dynamic motion cases and an unjittered Native 4096-spp direct-light reference.
+3. **ReSTIR DI**: Basic real-time correction (`4` initial candidates, `1` spatial proposal, scalar stable-history and fused initial/temporal/spatial/shading kernels) and a ray-traced reference policy. Final spatial reservoirs feed next-frame history by default; a temporal-only history comparison and Conventional MC remain selectable in F5.
+4. **Validation & sustained benchmarks**:
+   - All 11 CPU/offline `ctest` suites, all 15 `spirv-val` Vulkan 1.3 validations, forced Vulkan synchronization validation (`ReSTIR4` Basic Full DI), full-res `3440x1440` Jitter regression, and full-res `3440x1440` dynamic/disocclusion Motion Quality audits (`ReSTIR4` vs. `ReSTIR8`, including `7,016` revealed receiver pixels) pass.
+   - **Sustained `3440x1440` Mailbox benchmarks (RTX 3090, Nov 12, 30 runs / 226,201 frames)**: `Sandbox64Interior` averaged **174.3–174.5 FPS DLAA** (`4.82–4.84 ms` GPU), **250.9–251.1 FPS DLSS Quality** (`3.07 ms` GPU), and **267.4–268.3 FPS Native** (`2.85 ms` GPU), while `Boulder` exceeded **320 FPS DLAA** (`322.9–341.8 FPS`).
+   - **Equal-cost multi-view audits (48B packed build, `3440x1440`)**: `MC7` (`2.61 ms` lighting) and `MC8` (`2.87 ms`) bracket `ReSTIR4` (`2.68 ms`). Across 16 independent trajectories × 256 frames vs. `MC8`, `ReSTIR4` delivers **37.2% lower raw RGB MSE** and **77.9% lower raw luminance MSE** in `Sandbox64Interior`, and **42.3% lower raw luminance MSE** in `Sandbox64Exterior` (while `MC8` leads in the 3-emitter interior where sample count exceeds triangle count).
 
-This is direct lighting and shadows only: no GI, bounced light, indirect color bleeding or production denoiser. Boulder stays the startup scene; the Esc selector opens Lighting Sandbox, where F5 exposes ReSTIR DI and diagnostics.
-
-On the tested RTX 3090, short Release runs at full 3440x1440 DLAA reached about 200 FPS in the starting view, 168 FPS in the three-emitter interior and 142–145 FPS in the 64-emitter interior. Longer repeated normal-shader observations ranged roughly 124–200 FPS across views and changing GPU clocks. These are development measurements, not a sustained minimum. The approximately 200 FPS heavier-view target and a convincing quality-per-cost advantage over conventional sampling remain open; the tested reference fixtures currently favor MC8 in per-frame image error.
+This is direct lighting and shadows only: no GI, bounced light, indirect color bleeding or production denoiser. Boulder remains the startup scene; the Esc selector opens Lighting Sandbox, where F5 exposes ReSTIR DI, Conventional MC, telemetry and diagnostics. **Phase 5.1** is next: DLSS 4.5 Ray Reconstruction evaluation, Cornell Box, Crytek Sponza, multi-GPU/clean-machine verification and denoiser selection (SVGF stays deferred).
 
 Check out the [full roadmap](docs/roadmap.md) for detailed progress and upcoming milestones.
 
@@ -62,11 +63,14 @@ For a complete breakdown of every directory, component, and the GPU pipeline flo
 
 ## Release Downloads
 
-The latest published demo is [**MaksimEngine v0.2.1**](https://github.com/maksim-sterkis/MaksimEngine-Showcase/releases/tag/v0.2.1), released October 27, 2026, for Windows 10/11 64-bit. Download [MaksimEngine-v0.2.1-Portable.zip](https://github.com/maksim-sterkis/MaksimEngine-Showcase/releases/download/v0.2.1/MaksimEngine-v0.2.1-Portable.zip), extract it, keep all files and folders together, and launch `VK_game_engine.exe`.
+The latest packaged release is [**MaksimEngine v0.3.0**](https://github.com/maksim-sterkis/MaksimEngine-Showcase/releases/tag/v0.3.0), dated November 14, 2026, for Windows 10/11 64-bit. Download [MaksimEngine-v0.3.0-Portable.zip](https://github.com/maksim-sterkis/MaksimEngine-Showcase/releases/download/v0.3.0/MaksimEngine-v0.3.0-Portable.zip), extract it into a writable folder keeping all files and folders together, and launch `VK_game_engine.exe`.
 
-The v0.2.1 boulder demo includes model K DLAA/DLSS Super Resolution, NVIDIA Reflex, temporal rendering, improved Hi-Z culling, presentation controls and F4/F5 diagnostics. Its portable package includes NVIDIA components, Microsoft runtime DLLs and required NVIDIA notices; the release notes record an RTX 3090 launch test with real DLAA evaluation and clean shutdown. Native is the first-launch default; DLAA/DLSS require a supported NVIDIA RTX GPU and compatible driver.
+The v0.3.0 portable build (`VKE_BUILD_TESTS=OFF`, `NDEBUG`, stripped Release binary + `engine.pak`) includes:
+- Startup **Boulder** scene with meshlet LODs, conservative Hi-Z culling, and hardware ray-traced directional shadows.
+- **Esc scene selector → Lighting Sandbox** (`3` and `64` emissive lights, `ReSTIR DI` and `Conventional MC`, dynamic object/light motion toggles, `4096-spp` reference capture, and F3/F4/F5 diagnostics with live CPU/GPU/VRAM telemetry).
+- NVIDIA **model K DLAA / DLSS Super Resolution** (`Streamline 2.14.16` + Microsoft VC++ runtime DLLs + NVIDIA notices) and **NVIDIA Reflex** Off / On / On + Boost. Native is the first-launch default; DLAA/DLSS require a supported NVIDIA RTX GPU and compatible driver (non-RTX systems fall back cleanly to Native).
 
-Phase 5's emissive-light sandbox and ReSTIR DI are development work beyond v0.2.1 and are not included in that release. Current local performance work uses MinGW Release with DLSS and focused tests enabled; Debug builds provide Vulkan synchronization-validation evidence. Packaging and clean-machine verification of the newer Phase 5/5.1 pipeline remain pending. The published boulder demo does not establish a DLSS throughput gain or a Reflex latency improvement.
+Local RTX 3090 verification covers Release (`VKE_BUILD_TESTS=OFF`) compilation with zero external MinGW dependencies, `engine.pak` archive creation (`23` files: `15` SPIR-V shaders, `7` GLBs, `1` KTX2), and offline/GPU validation suites on the same codebase. Clean-machine verification on non-development Windows systems and Phase 5.1 Ray Reconstruction / Cornell / Sponza content remain pending.
 
 ## Credits & Dependencies
 - [Vulkan](https://www.vulkan.org/)

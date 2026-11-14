@@ -1,6 +1,6 @@
 # Current Engine Pipeline
 
-This diagram describes the implemented boulder and Phase 5 sandbox pipeline. ReSTIR DI has initial candidates, temporal reuse, spatial reuse and fresh final shadows, with Basic real-time or ray-traced reference correction. Phase 5 remains in progress: estimator/history validation and performance are open. See [interfaces and validation](file.md#verification-and-limits). There is no GI or production denoiser; RR follows in Phase 5.1 and SVGF stays deferred.
+This diagram describes the implemented boulder and Phase 5 sandbox pipeline (`v0.3.0`, completed 2026-11-14). ReSTIR DI runs initial candidate sampling, temporal reuse, spatial reuse and fresh final shadows with Basic real-time or ray-traced reference correction, 48-byte packed cached surfaces, 32-byte reservoirs and emission payload caching. See [interfaces and validation](file.md#verification-and-limits). There is no GI or production denoiser; DLSS Ray Reconstruction, Cornell Box, Crytek Sponza and extended integration validation follow in Phase 5.1, while SVGF stays deferred.
 
 ```mermaid
 flowchart TD
@@ -47,9 +47,10 @@ flowchart TD
         Deferred --> HDR["Linear HDR; optional Native reference sum and mean"]
         Deferred --> TemporalDI["Initial candidates + temporal reuse (Basic fused); previous surface/light/TLAS"]
         TemporalDI --> SpatialDI["Scalar stable-pixel + general disocclusion reuse; Basic/reference correction"]
-        TemporalDI -.-> HistoryDI["Retain pre-spatial reservoir for commit after successful submission"]
+        TemporalDI -.-> TemporalHistory["Optional temporal-only history comparison"]
         SpatialDI --> FinalDI["Fresh final visibility and direct RGB (Basic fused with spatial)"]
         FinalDI --> HDR
+        FinalDI -.-> HistoryDI["Retain final spatial reservoir for next frame by default"]
         Deferred --> Guides["Demanded motion/depth/normal/identity/validity guides"]
         HDR --> Mode{"Effective reconstruction"}
         Guides --> SDK
@@ -69,6 +70,7 @@ flowchart TD
         Submit --> Present["Mailbox / explicit Immediate / FIFO"]
         Submit --> Commit["Commit successful-submission temporal and depth snapshots"]
         HistoryDI -.-> Commit
+        TemporalHistory -.-> Commit
         Commit -.-> Frame
         Present --> Recreate{"Recreation required?"}
         Recreate -->|"Yes"| Reset["Recreate affected resources and invalidate histories"]
@@ -81,8 +83,10 @@ Geometry targets, HDR/guide images and history use submission-owned frame slots;
 
 Exactly unchanged views use compatible previous depth in one pass. Moving/jittered views recover predicted-occluded meshlets before lighting; overflow fails open by rendering immediately. Hi-Z history is independent of optional temporal guides and lighting resets.
 
-Ordinary Native does not blend previous color. Only the explicit unjittered reference accumulates sample sums to 4096 spp. ReSTIR reuses samples independently of SDK/reference state. Pre-spatial history is an implementation workaround for unstable recursive feedback; it loses repeated spatial propagation and is not a general ReSTIR requirement. See [verification and limits](file.md#verification-and-limits).
+Ordinary Native does not blend previous color. Only the explicit unjittered reference accumulates sample sums to 4096 spp. ReSTIR reuses samples independently of SDK/reference state. Final-spatial history restores repeated propagation; independent trajectory/regional/time-window checks replace reliance on one correlated sequence. Temporal-only history remains an optional comparison. See [verification and limits](file.md#verification-and-limits).
 
-Basic material/initial generation and temporal reuse are fused; scalar stable-pixel and general disocclusion kernels fuse spatial reuse with final shading. Reference modes and ablations retain separate kernels. Current GPU records are 80 bytes per cached surface and 32 bytes per reservoir; post-submission buffer rotation avoids a full-resolution history copy. Diagnostic shader variants and readback suites are opt-in and are absent from ordinary startup.
+Basic material/initial generation and temporal reuse are fused; scalar stable-pixel and general disocclusion kernels fuse spatial reuse with final shading. Reference modes and ablations retain separate kernels. Current GPU records are 48 bytes per cached surface and 32 bytes per reservoir; retaining final output directly avoids a full-resolution history copy. Diagnostic shader variants and readback suites are opt-in and are absent from ordinary startup.
+
+Importance targets still use full-contribution luminance. A tested rough-surface proxy was removed after failing to establish a reliable speedup against the original modules; final BRDF/shadow behavior and sample budgets remain unchanged. Material and regional reference checks remain part of the hidden offline audit.
 
 See [file architecture](file.md), [verification and limits](file.md#verification-and-limits) and the [Phase 5 roadmap](roadmap.md).

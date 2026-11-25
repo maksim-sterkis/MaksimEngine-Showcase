@@ -16,3 +16,10 @@
 Reproduce the ceiling with a light, focused workload. Record the build, driver, window mode, display refresh, reconstruction and Reflex settings, requested and effective present modes, application FPS, and displayed cadence. Compare Mailbox, Immediate, and FIFO under matched conditions and use frame timings to locate the wait. Verify any fix preserves the signed-off Mailbox behavior and live present-mode switching.
 
 [Phase 5.1 pacing verification](../roadmap.md#win32-mailbox-presentation-pacing) and [historical 200 FPS investigation](../rendering/dlss_integration.md#historical-canonical-name-200-fps-investigation).
+
+## Clean-Machine & Multi-GPU/Driver Verification
+
+**Open.** The `v0.3.1` portable distribution (`dist/MaksimEngine-v0.3.1-Portable.zip`) and all Phase 5.1 tests were built and verified locally on a single **NVIDIA GeForce RTX 3090** (`driver 621.14`, `3440×1440` display) Windows 11 development machine.
+
+- Verify `v0.3.1` (and subsequent releases) on a clean non-development Windows machine (confirming zero missing runtime DLLs, explicit RR-unavailable error reporting, and Native + NRD `RELAX`/`REBLUR` behavior).
+- Test across additional GPU architectures and drivers (NVIDIA Turing/Ada/Blackwell, AMD RDNA, Intel Arc) and higher display resolutions such as 4K (`3840×2160`).

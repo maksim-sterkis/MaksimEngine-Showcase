@@ -1,6 +1,6 @@
 # Phase 5.1 Integration Validation & Sponza Optimization Report
 
-**Date:** 2026-11-24
+**Date:** 2026-11-24 *(Task 7 audit; Task 8 spatial upscaling/`24/24` SPIR-V/SIGMA removal and Task 9 `v0.3.1` packaging subsequently closed Phase 5.1 on 2026-11-25)*
 
 **Hardware / OS Baseline:** NVIDIA GeForce RTX 3090 (24 GiB VRAM), Windows, 3440×1440 (21:9 ultrawide), Release build with Force LOD 0 active (`manual_lod_override = 0`; dynamic LOD stability deferred to [Phase 6.1](../planning/future-work.md#force-lod-0-default--dynamic-lod-temporal-stability-deferred-to-phase-61)).
 
@@ -122,7 +122,7 @@ On GPU-bound Sponza (`~70.3–70.9 FPS`), Reflex maintains throughput while shav
 ### 4.4 Visual Review & Open Coverage Limits
 
 - **Inspected Scenes & Overlays:** Visually reviewed rendered PNG captures across **Boulder** (`sandbox-boulder.png`), **Lighting Sandbox 3 & 64** (`sandbox-few.png`, `sandbox-many.png`, `restir-full-reference.png`), **Two-Room Courtyard** (`two-room-sandbox.png`), **Intel New Sponza** (`rr_balanced`, `dlssq_relax`, `dlssq_reblur`), and all **UI views** (`f5_collapsed`, `pause_menu`, `settings_display`, `settings_upscaling`, `settings_controls`, `exit_confirm`).
-- **Remaining Coverage Limits:** All Task 7 measurements ran locally on Windows with a single **NVIDIA GeForce RTX 3090** driver environment. Other GPU vendors/architectures (e.g., Turing/Ada/Blackwell, AMD RDNA, Intel Arc) and clean non-development Windows machines (including NRD shader/notice packaging and missing-runtime checks on a virgin OS image) remain deferred to **Task 9**.
+- **Remaining Coverage Limits:** All Task 7 measurements ran locally on Windows with a single **NVIDIA GeForce RTX 3090** driver environment. Other GPU vendors/architectures (e.g., Turing/Ada/Blackwell, AMD RDNA, Intel Arc) and clean non-development Windows machines (including missing-runtime checks on a virgin OS image) are tracked as future verification in [future work](../planning/future-work.md#clean-machine--multi-gpudriver-verification).
 
 ---
 

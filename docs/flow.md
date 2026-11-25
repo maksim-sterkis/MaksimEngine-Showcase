@@ -1,6 +1,6 @@
 # Current Engine Pipeline
 
-This diagram describes the shared pipeline for Boulder, both Lighting Sandbox layouts, Cornell Box, and Intel New Sponza (2022). It covers ReSTIR DI (48-byte packed cached surfaces, 32-byte reservoirs, emission payload caching), two-room sandbox with `0.53°` directional sunlight, native Vulkan **NVIDIA NRD (`v4.18.0`: `RELAX`, `REBLUR`, `SIGMA`)**, optional **DLSS 4.5 Ray Reconstruction (`preset F`)**, output-resolution emitter presentation (`present_emitters.comp.spv`), and Win32 NVIDIA Mailbox pre-present pacing. See [interfaces and validation](file.md#verification-and-limits). Lighting remains direct only (no GI or bounced light; custom SVGF stays deferred in favor of NRD).
+This diagram describes the shared pipeline for Boulder, both Lighting Sandbox layouts, Cornell Box, and Intel New Sponza (2022) in Phase 5.1 (`v0.3.1`). It covers ReSTIR DI (48-byte packed cached surfaces, 32-byte reservoirs, emission payload caching), two-room sandbox with `0.53°` directional sunlight, native Vulkan **NVIDIA NRD (`v4.18.0`: `RELAX`, `REBLUR`)**, optional **DLSS 4.5 Ray Reconstruction (`preset F`)**, independent DLSS reconstruction scaling (`Off (100%)`..`50%`) + EASU/RCAS spatial upscaling, output-resolution emitter presentation (`present_emitters.comp.spv`), and Win32 NVIDIA Mailbox pre-present pacing. See [interfaces and validation](file.md#verification-and-limits). Lighting remains direct only (no GI or bounced light; custom SVGF stays deferred in favor of NRD).
 
 ```mermaid
 flowchart TD
@@ -56,7 +56,7 @@ flowchart TD
         Deferred --> Demod
         Demod --> NRDCheck{"Effective NRD (mutually exclusive with RR)"}
         Guides --> NRDCheck
-        NRDCheck -->|"RELAX / REBLUR / SIGMA"| NRD["Native Vulkan NRD v4.18.0 + nrd_compose.comp"]
+        NRDCheck -->|"RELAX / REBLUR"| NRD["Native Vulkan NRD v4.18.0 + nrd_compose.comp"]
         NRD --> HDR
         HDR --> Mode{"Effective reconstruction"}
         Guides --> SDK
@@ -95,7 +95,7 @@ Exactly unchanged views use compatible previous depth in one pass. Moving/jitter
 
 Ordinary Native does not blend previous color. Only the explicit unjittered reference accumulates sample sums to 4096 spp (including both area emitters and two-room directional sun). ReSTIR reuses samples independently of SDK/reference state. Final-spatial history restores repeated propagation; temporal-only history remains an optional comparison. For **DLSS 4.5 Ray Reconstruction**, final shading averages four normalized estimates (`75%` fresh RIS probability); for **NRD RELAX**, final shading averages four fresh visibility-tested RIS estimates and guides the diffuse filter with emitter distance. Extra final-shading draws stay out of reservoir history.
 
-**NRD (`RELAX`, `REBLUR`, `SIGMA`)** and **DLSS 4.5 Ray Reconstruction** are mutually exclusive: selecting any RR mode forces effective NRD to `Off` and releases all NRD pools (`0 MiB`). When NRD is active, `nrd_compose.comp` remodulates denoised diffuse/specular irradiance (or composites SIGMA shadow visibility) into `temporal.color` before ordinary DLAA/DLSS SR or display tone mapping. When eligible, `present_emitters.comp.spv` (`emitter_presentation.glsl`) resolves visible area emitters at full output resolution via analytical pixel-coverage clipping after tone mapping/upscaling.
+**NRD (`RELAX`, `REBLUR`)** and **DLSS 4.5 Ray Reconstruction** are mutually exclusive: selecting any RR mode forces effective NRD to `Off` and releases all NRD pools (`0 MiB`). When NRD is active, `nrd_compose.comp` remodulates denoised diffuse/specular irradiance into `temporal.color` before ordinary DLAA/DLSS SR or display tone mapping. When eligible, `present_emitters.comp.spv` (`emitter_presentation.glsl`, or spatial emitter variants when spatial upscaling is active) resolves visible area emitters at full output resolution via analytical pixel-coverage clipping after tone mapping/upscaling.
 
 Basic material/initial generation and temporal reuse are fused; scalar stable-pixel and general disocclusion kernels fuse spatial reuse with final shading. Reference modes and ablations retain separate kernels. Current GPU records are 48 bytes per cached surface and 32 bytes per reservoir; retaining final output directly avoids a full-resolution history copy. Diagnostic shader variants and readback suites are opt-in and are absent from ordinary startup.
 

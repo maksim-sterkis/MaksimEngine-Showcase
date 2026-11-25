@@ -1,4 +1,4 @@
-# NVIDIA Real-Time Denoisers (NRD): RELAX, REBLUR, and SIGMA
+# NVIDIA Real-Time Denoisers (NRD): RELAX and REBLUR
 
 ## Overview & Mutual Exclusion Policy
 
@@ -6,31 +6,31 @@ Phase 5.1 Task 2 integrates **NVIDIA Real-Time Denoisers (NRD `v4.18.0`)** direc
 
 - **NRD RELAX** (`RELAX_DIFFUSE_SPECULAR`): Primary denoiser for low-spp emissive direct lighting and ReSTIR DI, compatible with `Native`, `DLAA`, and `DLSS Quality`/`Balanced`/`Performance`. ReSTIR final shading averages four fresh, visibility-tested RIS estimates. These draws stay out of reservoir history. The diffuse hit-distance guide uses the nearest sampled emitter, including when a blocker stops the visibility ray.
 - **NRD REBLUR** (`REBLUR_DIFFUSE_SPECULAR`): Alternative hit-distance- and luminance-aware diffuse/specular denoiser for the emissive direct-lighting pipeline.
-- **NRD SIGMA** (`SIGMA_SHADOW`): Ray-traced directional soft-shadow penumbra denoiser active on the non-sandbox Boulder scene (`sigmaSunAngularRadiusDeg = 1.5°` default).
+- *(Historical note: **NRD SIGMA** `SIGMA_SHADOW` was evaluated on Boulder during Task 2 and later removed in Task 8 cleanup to keep the active denoiser path focused on `RELAX` and `REBLUR`.)*
 
-**Mutual exclusion with DLSS Ray Reconstruction**: In `src/core/denoiser_settings.hpp` (`denoiser::resolve_effective`), selecting any DLSS Ray Reconstruction mode (`RayReconstructionDLAA`..`RayReconstructionUltraPerformance`) forces effective NRD to `Off` so lighting is never double-denoised. Persistent settings store `denoiserMode` separately from `effective`, freeing all NRD I/O images and permanent/transient pools (`0 MiB`) whenever NRD becomes `Off` (or when switching back from NRD or RR). `VKE_DENOISER_MODE=0..3` overrides the initial denoiser mode (`Off`, `RELAX`, `REBLUR`, `SIGMA`).
+**Mutual exclusion with DLSS Ray Reconstruction**: In `src/core/denoiser_settings.hpp` (`denoiser::resolve_effective`), selecting any DLSS Ray Reconstruction mode (`RayReconstructionDLAA`..`RayReconstructionUltraPerformance`) forces effective NRD to `Off` so lighting is never double-denoised. Persistent settings store `denoiserMode` separately from `effective`, freeing all NRD I/O images and permanent/transient pools (`0 MiB`) whenever NRD becomes `Off` (or when switching back from NRD or RR). `VKE_DENOISER_MODE=0..2` overrides the initial denoiser mode (`Off`, `RELAX`, `REBLUR`).
 
 ## Build & Native Vulkan Backend
 
 - **Pinned third-party sources (`cmake/NRD.cmake`)**: Downloads and SHA-256-verifies `NVIDIA-RTX/NRD v4.18.0`, `MathLib v11`, and `ShaderMake 3f01623a` into `.cache/nrd/` (no modified upstream sources; MinGW GCC 16 `<cmath>` ambiguity resolved via compiler `-include nrd_mingw_fix.hpp` for `using std::abs;`).
 - **SPIR-V embedding**: Compiles all `159` NRD compute shaders at build time via `ShaderMake` + Vulkan SDK `dxc.exe` with `NRD_NORMAL_ENCODING=2` (`VK_FORMAT_A2B10G10R10_UNORM_PACK32`, dedicated binding `31`), `NRD_ROUGHNESS_ENCODING=1` (linear roughness), `NRD_SUPPORTS_QUAD_INTRINSICS=0`, and `NRD_STATIC_LIBRARY=1`, linking `libNRD.a` statically with zero external runtime DLL dependencies and staging MIT notices to `nvidia-notices/nrd-license.txt`.
 - **Demodulation & Composition (`src/renderer/nrd_denoiser.cpp`, `shaders/nrd_common.glsl`, `shaders/nrd_compose.comp`)**:
-  - `deferred.comp` and `restir_final.glsl` write demodulated diffuse and specular radiance (`R16G16B16A16_SFLOAT`) plus linear view-space depth (`viewZ`), unjittered 2.5D motion (`motion`), packed `R10G10B10A2` world normal + linear roughness, and SIGMA shadow data / penumbra inputs while leaving ReSTIR reservoirs untouched.
+  - `deferred.comp` and `restir_final.glsl` write demodulated diffuse and specular radiance (`R16G16B16A16_SFLOAT`) plus linear view-space depth (`viewZ`), unjittered 2.5D motion (`motion`), and packed `R10G10B10A2` world normal + linear roughness while leaving ReSTIR reservoirs untouched.
   - NRD dispatches execute inside the `gpu_timing::denoiserBegin..denoiserEnd` GPU timestamp bracket, tracking per-image layout/access barriers across shared internal resources.
-  - `nrd_compose.comp` remodulates denoised diffuse and specular irradiance by surface diffuse/specular albedo plus emissive radiance (or composites denoised SIGMA sun visibility against hard direct lighting) into `temporal.color` before ordinary `DLAA`/`DLSS SR` or tone mapping.
-- **Diagnostics**: F5 exposes `Real-Time Denoiser (NRD)` controls (active/requested/effective mode, pipeline/VRAM telemetry, anti-firefly, history frame cap, SIGMA sun angular radius) and `Temporal view` indices `10..15` (`NRD demod diffuse`, `NRD demod specular`, `NRD normal/roughness`, `NRD viewZ/hitDist`, `NRD shadow data/result`, `NRD validation overlay`).
+  - `nrd_compose.comp` remodulates denoised diffuse and specular irradiance by surface diffuse/specular albedo plus emissive radiance into `temporal.color` before ordinary `DLAA`/`DLSS SR` or tone mapping.
+- **Diagnostics**: F5 exposes `Real-Time Denoiser (NRD)` controls (active/requested/effective mode, pipeline/VRAM telemetry, anti-firefly, history frame cap) and `Temporal view` indices `10..15` (`NRD demod diffuse`, `NRD demod specular`, `NRD normal/roughness`, `NRD viewZ/hitDist`, `NRD validation overlay`).
 
 ## Verification & RTX 3090 Measured Results
 
 - **CPU & Shader Verification**: `12/12` `ctest` suites pass (including `denoiser` unit tests); all engine and NRD SPIR-V compute/graphics shaders pass `spirv-val --target-env vulkan1.3`.
-- **Vulkan & Sync Validation (`VKE_NRD_SMOKE=1`)**: Passed under `VKE_FORCE_VALIDATION=1` and `VK_LAYER_VALIDATE_SYNC=1` with **zero engine or NRD validation/synchronization errors** across `NRD RELAX` (`1280×720`, debug views `10..15` + validation overlay), `NRD RELAX + DLSS Quality` (`853×480`), `NRD REBLUR` (`1280×720`), `RR DLAA` mutual-exclusion (`0 MiB` NRD), and Boulder `NRD SIGMA` (`1280×720`) + switchback cleanup (`0 MiB` NRD).
+- **Vulkan & Sync Validation (`VKE_NRD_SMOKE=1`)**: Passed under `VKE_FORCE_VALIDATION=1` and `VK_LAYER_VALIDATE_SYNC=1` with **zero engine or NRD validation/synchronization errors** across `NRD RELAX` (`1280×720`, debug views `10..15` + validation overlay), `NRD RELAX + DLSS Quality` (`853×480`), `NRD REBLUR` (`1280×720`), `RR DLAA` mutual-exclusion (`0 MiB` NRD), and switchback cleanup (`0 MiB` NRD).
 - **NRD Validation Overlay (`OUT_VALIDATION`)**: Visually inspected in `build/phase51-nrd-audit/static_validation_relax.png`: clean `UNITS` grid, `ROUGHNESS-1`, `Z` (`>0` surface / `INF` sky), `MV` (`0` static error, no jittered-MV artifacts), `NORMALS-2`, and full violet temporal convergence.
 
 ### 1. Static Quality vs. 1,024-spp Direct Reference (`3440×1440`, `VKE_NRD_AUDIT=1`)
 
-The benchmark tables below use the original single-estimate RELAX path.
+The benchmark tables below use the original single-estimate RELAX path (including historical Task 2 `NRD SIGMA` evaluation rows prior to its Task 8 removal).
 
-Measured on `Sandbox` (64 emitters and 3 emitters, ReSTIR DI 4 candidates, 64 settled frames) and `Boulder` (`SIGMA_SHADOW` `1.5°` sun radius compared against hard-RT baseline):
+Measured on `Sandbox` (64 emitters and 3 emitters, ReSTIR DI 4 candidates, 64 settled frames) and `Boulder` (historical Task 2 `SIGMA_SHADOW` `1.5°` sun radius compared against hard-RT baseline):
 
 | Scene | Configuration | Internal Res | RGB RMSE | Lum RMSE | PSNR (dB) | Mean Lum Ratio |
 | :--- | :--- | ---: | ---: | ---: | ---: | ---: |
@@ -86,6 +86,6 @@ Replays the 64-frame camera + moving-cube + cube-snap (`frame 32`, `474,553` dis
 ## Reproduction Commands (Release Test Build `build/nsight-release`)
 
 - Smoke + forced Vulkan sync validation: `VKE_FORCE_VALIDATION=1 VK_LAYER_VALIDATE_SYNC=1 VKE_NRD_SMOKE=1 VKE_FIXED_PRESENT_PROBE=1 VKE_PROBE_HIDDEN=1 ./build/nsight-release/VK_game_engine.exe`
-- Static/dynamic/SIGMA quality audit: `VKE_NRD_AUDIT=1 VKE_FIXED_PRESENT_PROBE=1 VKE_PROBE_HIDDEN=1 VKE_PROBE_BORDERLESS=1 ./build/nsight-release/VK_game_engine.exe`
+- Static/dynamic quality audit: `VKE_NRD_AUDIT=1 VKE_FIXED_PRESENT_PROBE=1 VKE_PROBE_HIDDEN=1 VKE_PROBE_BORDERLESS=1 ./build/nsight-release/VK_game_engine.exe`
 - Memory audit: `VKE_NRD_MEMORY_AUDIT=1 VKE_FIXED_PRESENT_PROBE=1 VKE_PROBE_HIDDEN=1 VKE_PROBE_BORDERLESS=1 ./build/nsight-release/VK_game_engine.exe`
 - Visible `3440×1440` GPU timing benchmark: `VKE_NRD_BENCH=1 VKE_FIXED_PRESENT_PROBE=1 VKE_PROBE_BORDERLESS=1 ./build/nsight-release/VK_game_engine.exe`

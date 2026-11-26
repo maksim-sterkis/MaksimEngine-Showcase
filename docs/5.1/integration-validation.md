@@ -171,3 +171,10 @@ On GPU-bound Sponza (`~70.3–70.9 FPS`), Reflex maintains throughput while shav
 ![sandbox many](integration-validation-images/task7/sandbox-many.png)
 
 ![two room sandbox](integration-validation-images/task7/two-room-sandbox.png)
+
+## v0.3.1 portable release refresh
+
+- Both ZIPs were rebuilt with Windows Explorer-compatible paths and checked with the .NET ZIP reader and Windows Explorer. The standard archive contains 19 files and the Sponza archive contains 267. A full extraction check passed for the standard archive.
+- The RTX 3090 Sponza run at 3440×1440 with all four add-ons, 10,000 candle points and RR Balanced measured process VRAM falling from 5,066 MiB to 3,533 MiB after the 2K texture cap and on-demand render allocations.
+- The refresh passed 12/12 CTest suites, SPIR-V validation for compiled engine shaders, and forced Vulkan synchronization validation for Sponza RR Balanced, spatial upscaling and temporal smoke checks.
+- The refreshed release also passed a manual RTX 5060 check at 4K. The figures above come from the RTX 3090 run.

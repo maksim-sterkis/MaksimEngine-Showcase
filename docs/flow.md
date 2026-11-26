@@ -10,7 +10,7 @@ flowchart TD
         Runtime --> Device["Vulkan instance/device and dispatch hooks"]
         Device --> Targets["Swapchain, two geometry slots, HDR, guide and NRD pools"]
         Main --> Assets["Preloaded boulder, benchmark and two-room sandbox GLBs"]
-        Assets --> BLAS["Six LOD BLAS and scene TLAS"]
+        Assets --> BLAS["Six LOD BLAS built and compacted in chunks, plus scene TLAS"]
         Assets --> Bindless["Buffer-address model table and global materials/textures"]
     end
 

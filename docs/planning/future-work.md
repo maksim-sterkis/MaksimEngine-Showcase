@@ -19,7 +19,7 @@ Reproduce the ceiling with a light, focused workload. Record the build, driver, 
 
 ## Clean-Machine & Multi-GPU/Driver Verification
 
-**Open.** The `v0.3.1` portable distribution (`dist/MaksimEngine-v0.3.1-Portable.zip`) and all Phase 5.1 tests were built and verified locally on a single **NVIDIA GeForce RTX 3090** (`driver 621.14`, `3440×1440` display) Windows 11 development machine.
+**Open.** The Windows 11 **NVIDIA GeForce RTX 3090** development machine (driver `621.14`, `3440×1440`) is the Phase 5.1 automated test and benchmark baseline. The refreshed `v0.3.1` release also passed a manual **RTX 5060** check at `3840×2160`. [Release refresh validation](../5.1/integration-validation.md#v031-portable-release-refresh)
 
-- Verify `v0.3.1` (and subsequent releases) on a clean non-development Windows machine (confirming zero missing runtime DLLs, explicit RR-unavailable error reporting, and Native + NRD `RELAX`/`REBLUR` behavior).
-- Test across additional GPU architectures and drivers (NVIDIA Turing/Ada/Blackwell, AMD RDNA, Intel Arc) and higher display resolutions such as 4K (`3840×2160`).
+- Extend portable validation across clean Windows installations (confirming zero missing runtime DLLs, explicit RR-unavailable error reporting, and Native + NRD `RELAX`/`REBLUR` behavior).
+- Test across additional GPU architectures and drivers (NVIDIA Turing and Ada, more Blackwell configurations, AMD RDNA, and Intel Arc), including further 4K testing.
